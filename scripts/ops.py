@@ -1,7 +1,8 @@
-"""Live ops for the agent loop: append events and serve a 1 s auto-refresh dashboard. Stdlib only.
+"""Live ops for the agent loop: append events and serve the dashboard (scripts/ops.html). Stdlib only.
 
-    python3 scripts/ops.py log task=T-03 step=BUILD agent=tv-builder model=sonnet status=start msg="db.py"
-    make ops   # serves http://localhost:8001 from Docker
+    python3 scripts/ops.py log task=T-03 step=BUILD agent=tv-builder model=sonnet status=start msg="db.py" size=M
+    python3 scripts/ops.py log task=S0 step=SPEC_REVIEW agent=fork-neutra model=opus status=done score=4.2 conf=85
+    make ops   # serves http://localhost:8001 from Docker; the page polls /state.json every 1 s
 
 Dev tooling for docs/process/agent-loop.md (D-021); not part of the app.
 """
@@ -11,17 +12,19 @@ import os
 import re
 import sys
 from datetime import datetime
-from html import escape
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 LOG = Path(os.getenv("OPS_LOG", ROOT / "ops" / "events.jsonl"))
 SLICES = ROOT / "docs" / "plan" / "slices.md"
+PAGE = Path(__file__).with_name("ops.html")
 STEPS = ["SYNC", "PICK", "SPEC", "SIZE", "BUILD", "VERIFY", "REVIEW", "FIX", "CLOSE", "SPEC_REVIEW", "COMMIT"]
 AGENTS = {"tv-architect": "opus", "tv-builder": "sonnet", "tv-runner": "haiku", "tv-spec-reviewer": "opus",
           "fork-otimista": "opus", "fork-neutra": "opus", "fork-pessimista": "opus"}
 END = {"ok", "fail", "changes", "approve", "pass", "revise", "human", "done"}
+FAIL = {"fail", "changes", "revise", "human"}
+GATE = 75  # SPEC REVIEW gates on confidence, not on the score (D-020)
 
 
 def log(args):
@@ -47,113 +50,106 @@ def events():
 
 
 def slices():
-    rows, cur = [], None
+    """Slice rows for the page plus {task: (slice, description)} from the checkboxes in slices.md."""
+    rows, where, cur = [], {}, None
     for line in SLICES.read_text().splitlines() if SLICES.exists() else []:
         if m := re.match(r"## (S\d+): (.*)", line):
             cur = {"id": m[1], "name": m[2].split("(")[0].strip(), "done": 0, "total": 0}
             rows.append(cur)
-        elif cur and (m := re.match(r"- \[([ x])\] \*\*T-", line)):
+        elif cur and (m := re.match(r"- \[([ x])\] \*\*(T-\d+)\*\*(.*)", line)):
             cur["total"] += 1
             cur["done"] += m[1] == "x"
-    return rows
+            where[m[2]] = (cur["id"], re.sub(r"`?\[[A-Z]+\]`?|[`*]", "", m[3].split(" *P")[0]).strip())
+    return rows, where
 
 
-def ago(ts):
-    try:
-        s = int((datetime.now().astimezone() - datetime.fromisoformat(ts)).total_seconds())
-    except (TypeError, ValueError):
-        return ""
-    return f"{s}s" if s < 90 else f"{s // 60}m{s % 60:02d}s" if s < 3600 else f"{s // 3600}h{s % 3600 // 60:02d}m"
+def status(ev):
+    raw = ev.get("status")
+    return "start" if raw == "start" else "fail" if raw in FAIL else "ok"
 
 
-def e(x):
-    return escape(str(x if x is not None else ""))
+def phase(ev):
+    return str(ev.get("step", "")).replace("_", " ")
 
 
-def fragment():
+def nums(ev):
+    """(score, conf) from the fields, or from a msg like 'nota 4.3 conf 85%'."""
+    m = re.search(r"nota (\d+(?:\.\d+)?)\D+?(\d+(?:\.\d+)?)%", ev.get("msg", ""))
+    score, conf = ev.get("score") or (m and m[1]), ev.get("conf") or (m and m[2])
+    return (float(score) if score else None, float(conf) if conf else None)
+
+
+def state():
     evs = events()
+    rows, where = slices()
     steps = [ev for ev in evs if ev.get("step") in STEPS]
-    cur = steps[-1] if steps else {}
-    agents = {name: None for name in AGENTS}
+
+    cur = None
+    if steps and not (steps[-1]["step"] == "COMMIT" and status(steps[-1]) == "ok"):
+        last = steps[-1]
+        task = last.get("task", "")
+        mine = [ev for ev in steps if ev.get("task") == task]
+        since = last.get("ts")
+        for ev in reversed(mine):  # start of the current run of this step
+            if ev["step"] != last["step"]:
+                break
+            since = ev.get("ts")
+        seen = {ev["step"] for ev in mine}
+        slice_id, desc = where.get(task, (task if re.fullmatch(r"S\d+", task) else None, ""))
+        size = next((ev["size"] for ev in reversed(mine) if ev.get("size")), None)
+        cur = {"task": task, "title": f"{task} {desc}".strip()[:90], "slice": slice_id, "phase": phase(last),
+               "status": "fail" if status(last) == "fail" else "start", "agent": last.get("agent", ""),
+               "since": since, "detail": last.get("msg", ""), "size": f"classe {size}" if size else None,
+               "skipped": [s.replace("_", " ") for s in STEPS[:STEPS.index(last["step"])] if s not in seen]}
+
+    agents = {n: {"name": n, "model": m, "status": "idle"} for n, m in AGENTS.items()}
+    reviews, votes, tries, commits = [], {}, {}, []
     for ev in evs:
-        if ev.get("agent"):
-            agents[ev["agent"]] = ev
-    reviews = [ev for ev in evs if ev.get("step") == "SPEC_REVIEW" and ev.get("score")]
-    commits = [ev for ev in evs if ev.get("step") == "COMMIT" and ev.get("status") in ("ok", None)]
+        name, task = ev.get("agent", ""), ev.get("task", "")
+        if name:
+            agents[name] = {"name": name, "model": ev.get("model") or AGENTS.get(name, ""),
+                            "status": "idle" if ev.get("status") in END else "working",
+                            "detail": f"{task} {phase(ev)} · {ev.get('msg', '')}", "since": ev.get("ts")}
+        if ev.get("step") == "SPEC_REVIEW":
+            score, conf = nums(ev)
+            if name.startswith("fork-") and conf is not None:
+                votes.setdefault(task, {})[name[5:]] = conf
+            elif name == "tv-spec-reviewer" and score is not None:
+                tries[task] = tries.get(task, 0) + 1
+                gate = str(ev.get("gate", "")).upper()
+                reviews.append({"slice": task, "attempt": tries[task], "score": score, "conf": conf,
+                                "pass": gate == "PASS", "reason": f"{gate} · {ev.get('msg', '')}".strip(" ·"),
+                                "ts": ev.get("ts"), "votes": votes.pop(task, None)})
+        elif ev.get("step") == "COMMIT" and status(ev) == "ok":
+            sha, _, subject = ev.get("msg", "").partition(" ")
+            if not re.fullmatch(r"[0-9a-f]{7,40}", sha):
+                sha, subject = "—", ev.get("msg", "")
+            commits.append({"hash": sha, "msg": subject, "slice": task, "ts": ev.get("ts")})
 
-    loop = "".join(
-        f'<li class="{"on " + e(cur.get("status")) if s == cur.get("step") else ""}">{s.replace("_", " ")}</li>' for s in STEPS)
-    head = (f'<section class="card now"><h2>Agora</h2><div class="big">{e(cur.get("task", "—"))} · {e(cur.get("step", "ocioso"))}</div>'
-            f'<div>{e(cur.get("agent", ""))} <span class="st {e(cur.get("status"))}">{e(cur.get("status", ""))}</span> há {ago(cur.get("ts"))}</div>'
-            f'<div class="msg">{e(cur.get("msg", ""))}</div><ol class="loop">{loop}</ol></section>')
+    feed = []
+    for ev in evs[-500:]:
+        raw, msg = ev.get("status", ""), ev.get("msg", "")
+        if raw not in ("start", "ok", "fail", "done", ""):
+            msg = f"{raw} · {msg}"
+        feed.append({"ts": ev.get("ts"), "task": ev.get("task", ""), "phase": phase(ev),
+                     "agent": ev.get("agent", ""), "status": status(ev), "msg": msg})
 
-    arows = ""
-    for name, ev in agents.items():
-        busy = ev is not None and ev.get("status") not in END
-        state = "trabalhando" if busy else "ocioso"
-        last = f'{e(ev.get("task"))} {e(ev.get("step"))} · {e(ev.get("msg"))}' if ev else "—"
-        arows += (f'<tr class="{"busy" if busy else ""}"><td><span class="dot"></span>{e(name)}</td><td><span class="model {AGENTS[name]}">{AGENTS[name]}</span></td>'
-                  f'<td>{state}</td><td class="msg">{last}</td><td>{ago(ev.get("ts")) if ev else ""}</td></tr>')
-
-    srows = ""
-    for s in slices():
-        pct = 100 * s["done"] // s["total"] if s["total"] else 0
-        srows += f'<tr><td>{e(s["id"])}</td><td>{e(s["name"])}</td><td><div class="bar"><i style="width:{pct}%"></i></div></td><td>{s["done"]}/{s["total"]}</td></tr>'
-
-    rrows = "".join(
-        f'<tr><td>{e(r.get("task"))}</td><td>{e(r.get("score"))}/5</td><td>{e(r.get("conf"))}%</td>'
-        f'<td><span class="st {e(str(r.get("gate", "")).lower())}">{e(r.get("gate"))}</span></td><td class="msg">{e(r.get("msg"))}</td></tr>'
-        for r in reversed(reviews[-8:])) or '<tr><td colspan="5" class="dim">nenhuma revisão ainda</td></tr>'
-    crows = "".join(f'<li><code>{e(c.get("msg", ""))[:72]}</code> <span class="dim">{e(c.get("task"))} · {ago(c.get("ts"))}</span></li>'
-                    for c in reversed(commits[-6:])) or '<li class="dim">nenhum commit ainda</li>'
-    feed = "".join(
-        f'<tr><td class="dim">{e(ev.get("ts", ""))[11:19]}</td><td>{e(ev.get("task"))}</td><td>{e(ev.get("step"))}</td>'
-        f'<td>{e(ev.get("agent"))}</td><td><span class="st {e(ev.get("status"))}">{e(ev.get("status"))}</span></td><td class="msg">{e(ev.get("msg"))}</td></tr>'
-        for ev in reversed(evs[-40:])) or '<tr><td colspan="6" class="dim">sem eventos em ops/events.jsonl</td></tr>'
-
-    return (f'{head}<section class="card"><h2>Agentes</h2><table>{arows}</table></section>'
-            f'<section class="card"><h2>Slices</h2><table>{srows}</table></section>'
-            f'<section class="card"><h2>SPEC review (gate ≥ 75%)</h2><table><tr><th>slice</th><th>nota</th><th>conf.</th><th>gate</th><th>motivo</th></tr>{rrows}</table>'
-            f'<h2>Commits</h2><ul class="commits">{crows}</ul></section>'
-            f'<section class="card wide"><h2>Eventos ({len(evs)})</h2><table class="feed">{feed}</table></section>')
-
-
-PAGE = """<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>TalentVisor Live Ops</title><style>
-:root{--bg:#0e1116;--card:#161b22;--line:#2a313c;--fg:#d6dde6;--dim:#7d8896;--acc:#58a6ff;--ok:#3fb950;--warn:#d29922;--bad:#f85149}
-*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--fg);font:14px/1.45 ui-monospace,SFMono-Regular,Menlo,monospace}
-header{display:flex;justify-content:space-between;align-items:center;padding:12px 16px;border-bottom:1px solid var(--line)}
-header b{color:var(--acc)}#live{color:var(--ok)}#live.off{color:var(--bad)}
-main{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,460px),1fr));gap:12px;padding:12px 16px}
-.card{background:var(--card);border:1px solid var(--line);border-radius:8px;padding:12px;min-width:0}.wide{grid-column:1/-1}
-h2{margin:0 0 8px;font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:var(--dim)}
-table{width:100%;border-collapse:collapse}td,th{padding:3px 6px;text-align:left;border-top:1px solid var(--line);vertical-align:top}th{color:var(--dim);font-weight:400}
-.msg{color:var(--dim);overflow-wrap:anywhere}.dim{color:var(--dim)}.big{font-size:22px;color:var(--acc);margin-bottom:4px}
-.loop{display:flex;flex-wrap:wrap;gap:4px;list-style:none;padding:0;margin:10px 0 0}.loop li{padding:2px 7px;border:1px solid var(--line);border-radius:4px;color:var(--dim);font-size:12px}
-.loop li.on{border-color:var(--acc);color:#fff;background:#1f6feb33}.loop li.on.fail,.loop li.on.changes{border-color:var(--bad)}
-.st{padding:0 6px;border-radius:4px;font-size:12px;background:#ffffff14}.st.start{color:var(--acc)}.st.ok,.st.approve,.st.pass,.st.done{color:var(--ok)}
-.st.fail,.st.human{color:var(--bad)}.st.changes,.st.revise{color:var(--warn)}
-.dot{display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--line);margin-right:6px}tr.busy .dot{background:var(--ok);box-shadow:0 0 6px var(--ok);animation:p 1s infinite}
-@keyframes p{50%{opacity:.35}}.model{font-size:11px;padding:0 5px;border-radius:3px}.opus{background:#a371f733;color:#d2a8ff}.sonnet{background:#1f6feb33;color:#79c0ff}.haiku{background:#3fb95033;color:#7ee787}
-.bar{height:8px;background:var(--line);border-radius:4px;overflow:hidden;min-width:80px}.bar i{display:block;height:100%;background:var(--ok)}
-.commits{margin:0;padding-left:18px}code{color:var(--fg)}
-@media(prefers-reduced-motion:reduce){tr.busy .dot{animation:none}}
-</style></head><body><header><div><b>TalentVisor</b> · Live Ops · agent loop</div><div><span id="live">● ao vivo</span> <span id="clock" class="dim"></span></div></header>
-<main id="m">__FRAG__</main><script>
-const m=document.getElementById('m'),live=document.getElementById('live'),clock=document.getElementById('clock');
-setInterval(async()=>{try{const r=await fetch('/frag',{cache:'no-store'});m.innerHTML=await r.text();live.className='';live.textContent='● ao vivo'}
-catch{live.className='off';live.textContent='● sem conexão'}clock.textContent=new Date().toLocaleTimeString('pt-BR')},1000);
-</script></body></html>"""
+    return {"project": "TalentVisor", "loop": "agent loop", "gate": GATE,
+            "phases": [s.replace("_", " ") for s in STEPS], "current": cur, "agents": list(agents.values()),
+            "slices": rows, "reviews": reviews, "commits": commits, "events": feed}
 
 
 class Handler(BaseHTTPRequestHandler):
     def do_GET(self):
-        if self.path not in ("/", "/frag"):
+        if self.path == "/state.json":
+            body, ctype = json.dumps(state(), ensure_ascii=False).encode(), "application/json"
+        elif self.path == "/":
+            body, ctype = PAGE.read_bytes(), "text/html; charset=utf-8"
+        else:
             self.send_error(404)
             return
-        body = (fragment() if self.path == "/frag" else PAGE.replace("__FRAG__", fragment())).encode()
         self.send_response(200)
-        self.send_header("Content-Type", "text/html; charset=utf-8")
+        self.send_header("Content-Type", ctype)
         self.send_header("Cache-Control", "no-store")
         self.end_headers()
         self.wfile.write(body)

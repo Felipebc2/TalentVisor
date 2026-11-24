@@ -83,8 +83,9 @@ python3 scripts/ops.py log task=T-03 step=BUILD agent=tv-builder model=sonnet st
 ```
 
 - `status`: `start`, `ok`, `fail`, `changes`, `approve`, `pass`, `revise`, `human`.
-- Na revisão da SPEC: `step=SPEC_REVIEW score=4.2 conf=80 gate=PASS`. No commit: `step=COMMIT msg=<hash> <assunto>`.
-- `make ops` serve o dash em http://localhost:8001 (refresh 1 s), com o loop, os agentes ativos, o progresso das slices, as notas de SPEC e o feed de eventos ([D-021](decisions.md)).
+- No PICK/SIZE: `size=S|M|L` (vira a classe no card "Agora").
+- Na revisão da SPEC: o revisor loga `step=SPEC_REVIEW agent=tv-spec-reviewer score=4.2 conf=80 gate=PASS`; cada fork loga `agent=fork-<visão> status=done score=… conf=…` (vira o ponto do fork na barra). No commit: `step=COMMIT msg=<hash> <assunto>`.
+- `make ops` serve o dash em http://localhost:8001: a página `scripts/ops.html` lê `/state.json` (montado pelo `ops.py` a partir do `events.jsonl` e do [Slices](../plan/slices.md)) a cada 1 s em páginas trocadas pela nav (Agora, Slices, Agentes, Spec review, Commits, Eventos; `#hash` na URL) ([D-021](decisions.md)).
 
 ### Pacote da task (o que o orquestrador envia)
 

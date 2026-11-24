@@ -1,0 +1,825 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>TalentVisor Live Ops</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+/* =====================================================================
+   SPEC LIVE OPS · template
+   Layout: herói "Agora" (anel do loop) + 4 resumos ao lado; abaixo, um
+   bento de 12 colunas: slices | agentes, spec review | commits, eventos.
+   Para trocar a identidade do projeto, mexa só nos tokens deste bloco.
+   ===================================================================== */
+:root{
+  color-scheme: light;
+  --font-ui: "Plus Jakarta Sans", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+
+  --bg: #eef1f6;            /* fundo da página */
+  --surface: #ffffff;       /* cards */
+  --surface-2: #f4f6fa;     /* trilhos, chips, linhas zebradas */
+  --line: #e1e5ee;          /* bordas e grades */
+  --ink: #141a2b;           /* texto principal */
+  --ink-2: #4b536a;         /* texto secundário */
+  --ink-3: #7b839a;         /* rótulos e eixos */
+
+  --accent: #2a6fdd;        /* etapa atual, progresso, foco */
+  --accent-ink: #1c55b5;    /* texto sobre fundo claro do accent */
+
+  /* estado (reservado: nunca usar como cor de série) */
+  --good: #0ca30c;   --good-ink: #0a6f0a;
+  --warn: #e39a00;   --warn-ink: #7d5200;
+  --crit: #d03b3b;   --crit-ink: #ae2626;
+
+  /* identidade do modelo (sempre acompanhada do nome) */
+  --m-opus: #6250d6;
+  --m-sonnet: #eb6834;
+  --m-haiku: #1baf7a;
+
+  --radius: 20px;
+  --shadow: 0 1px 2px rgba(20,26,43,.04), 0 10px 28px -14px rgba(20,26,43,.14);
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    color-scheme: dark;
+    --bg: #0c0f16; --surface: #151923; --surface-2: #1c2130; --line: #272d3e;
+    --ink: #eef0f6; --ink-2: #abb2c6; --ink-3: #7c849c;
+    --accent: #4b8cf0; --accent-ink: #8fb7f7;
+    --good: #0ca30c; --good-ink: #5fd05f;
+    --warn: #fab219; --warn-ink: #fac552;
+    --crit: #e05252; --crit-ink: #f58a8a;
+    --m-opus: #9085e9; --m-sonnet: #d95926; --m-haiku: #199e70;
+    --shadow: 0 1px 0 rgba(255,255,255,.02) inset;
+  }
+}
+:root[data-theme="dark"]{
+  color-scheme: dark;
+  --bg: #0c0f16; --surface: #151923; --surface-2: #1c2130; --line: #272d3e;
+  --ink: #eef0f6; --ink-2: #abb2c6; --ink-3: #7c849c;
+  --accent: #4b8cf0; --accent-ink: #8fb7f7;
+  --good: #0ca30c; --good-ink: #5fd05f;
+  --warn: #fab219; --warn-ink: #fac552;
+  --crit: #e05252; --crit-ink: #f58a8a;
+  --m-opus: #9085e9; --m-sonnet: #d95926; --m-haiku: #199e70;
+  --shadow: 0 1px 0 rgba(255,255,255,.02) inset;
+}
+
+*{box-sizing:border-box}
+html,body{margin:0}
+body{
+  background:var(--bg); color:var(--ink);
+  font:500 14px/1.45 var(--font-ui);
+  -webkit-font-smoothing:antialiased;
+}
+h1,h2,h3,p,ul,ol{margin:0;padding:0}
+ul,ol{list-style:none}
+button{font:inherit;color:inherit}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:8px}
+.mono{font-family:var(--font-mono);font-variant-numeric:tabular-nums}
+.muted{color:var(--ink-3)}
+
+.wrap{
+  max-width:1600px;margin:0 auto;
+  padding:18px clamp(16px,2.4vw,32px) 40px;
+  display:flex;flex-direction:column;gap:16px;
+}
+
+/* ---------- topo ---------- */
+.top{display:flex;flex-wrap:wrap;align-items:center;gap:12px 20px}
+.brand{display:flex;align-items:center;gap:12px;min-width:0;margin-right:auto}
+.brand svg{flex:none}
+.brand h1{font-size:18px;font-weight:800;letter-spacing:-.01em}
+.brand p{font-size:13px;color:var(--ink-3)}
+.top-tools{display:flex;flex-wrap:wrap;align-items:center;gap:10px}
+.live{
+  display:flex;align-items:center;gap:8px;
+  background:var(--surface);border:1px solid var(--line);border-radius:999px;
+  padding:6px 12px;font-size:12.5px;font-weight:600;color:var(--ink-2);
+}
+.live i{width:8px;height:8px;border-radius:50%;background:var(--good);box-shadow:0 0 0 0 color-mix(in srgb,var(--good) 60%,transparent);animation:ping 2s infinite}
+.live.is-down i{background:var(--crit);animation:none}
+.live time{color:var(--ink);font-family:var(--font-mono);font-variant-numeric:tabular-nums;font-weight:500}
+.icon-btn{
+  width:34px;height:34px;display:grid;place-items:center;cursor:pointer;
+  background:var(--surface);border:1px solid var(--line);border-radius:50%;color:var(--ink-2);
+}
+.icon-btn:hover{color:var(--ink);border-color:var(--ink-3)}
+@keyframes ping{70%,100%{box-shadow:0 0 0 7px transparent}}
+
+/* ---------- grade e cards ---------- */
+.grid{display:grid;grid-template-columns:repeat(12,minmax(0,1fr));gap:16px}
+.card{
+  background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);
+  padding:20px;box-shadow:var(--shadow);min-width:0;
+}
+.s12{grid-column:span 12}.s8{grid-column:span 8}.s7{grid-column:span 7}.s5{grid-column:span 5}.s4{grid-column:span 4}
+.card-head{display:flex;align-items:baseline;justify-content:space-between;gap:12px;margin-bottom:14px;flex-wrap:wrap}
+.card-head h2{font-size:15px;font-weight:700;letter-spacing:-.005em}
+.card-head .aside{font-size:12.5px;color:var(--ink-3)}
+.empty{
+  display:flex;align-items:center;gap:10px;color:var(--ink-3);font-size:13px;
+  background:var(--surface-2);border:1px dashed var(--line);border-radius:12px;padding:14px 16px;
+}
+
+/* ---------- pílulas e chips ---------- */
+.pill{
+  display:inline-flex;align-items:center;gap:5px;white-space:nowrap;
+  font-size:11.5px;font-weight:700;line-height:1;padding:5px 8px;border-radius:999px;
+  background:var(--surface-2);color:var(--ink-2);
+}
+.pill.start{background:color-mix(in srgb,var(--accent) 14%,transparent);color:var(--accent-ink)}
+.pill.ok{background:color-mix(in srgb,var(--good) 15%,transparent);color:var(--good-ink)}
+.pill.fail{background:color-mix(in srgb,var(--crit) 15%,transparent);color:var(--crit-ink)}
+.chip{
+  display:inline-flex;align-items:center;gap:6px;white-space:nowrap;
+  font-size:12px;font-weight:600;padding:4px 9px;border-radius:8px;
+  background:var(--surface-2);color:var(--ink-2);border:1px solid var(--line);
+}
+.model{display:inline-flex;align-items:center;gap:5px;font-size:11.5px;font-weight:600;color:var(--ink-2);white-space:nowrap}
+.model i{width:7px;height:7px;border-radius:50%;background:var(--ink-3)}
+.model[data-model="opus"] i{background:var(--m-opus)}
+.model[data-model="sonnet"] i{background:var(--m-sonnet)}
+.model[data-model="haiku"] i{background:var(--m-haiku)}
+
+/* ---------- AGORA ---------- */
+.now{
+  display:grid;grid-template-columns:auto minmax(0,1fr);gap:8px 32px;align-items:center;
+  background:
+    radial-gradient(120% 140% at 0% 0%, color-mix(in srgb,var(--accent) 9%,transparent), transparent 55%),
+    var(--surface);
+}
+.ring{position:relative;width:min(240px,62vw);aspect-ratio:1;justify-self:center}
+.ring svg{width:100%;height:100%;display:block}
+.seg{fill:none;stroke-width:22;stroke:color-mix(in srgb,var(--ink) 9%,var(--surface))}
+.seg.done{stroke:color-mix(in srgb,var(--accent) 34%,var(--surface))}
+.seg.skipped{stroke:color-mix(in srgb,var(--ink) 9%,var(--surface));stroke-dasharray:3 4}
+.seg.active{stroke:var(--accent)}
+.seg.fail{stroke:var(--crit)}
+.seg-halo{fill:none;stroke-width:32;stroke:var(--accent);opacity:.22;animation:halo 1.8s ease-in-out infinite}
+.seg-halo.fail{stroke:var(--crit);animation:none}
+.seg-n{font:600 10.5px var(--font-mono);fill:var(--ink-3);text-anchor:middle;dominant-baseline:central;pointer-events:none}
+.seg-n.done{fill:var(--accent-ink)}
+.seg-n.active,.seg-n.fail{fill:#fff}
+@keyframes halo{0%,100%{opacity:.08}50%{opacity:.28}}
+.ring-center{
+  position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;
+  text-align:center;gap:2px;pointer-events:none;padding:0 46px;
+}
+.ring-center small{font-size:11px;font-weight:600;color:var(--ink-3)}
+.ring-center strong{font-size:23px;font-weight:800;letter-spacing:-.01em;line-height:1.1;text-wrap:balance}
+.ring-center .timer{font:500 15px var(--font-mono);font-variant-numeric:tabular-nums;color:var(--accent-ink);margin-top:2px}
+.ring-center .timer.fail{color:var(--crit-ink)}
+
+.now-info{display:flex;flex-direction:column;gap:12px;min-width:0}
+.now-kicker{display:flex;align-items:center;gap:8px;font-size:12.5px;font-weight:600;color:var(--ink-3)}
+.now-title{font-size:24px;font-weight:800;letter-spacing:-.015em;line-height:1.15;text-wrap:balance}
+.now-meta{display:flex;flex-wrap:wrap;gap:6px}
+.now-detail{
+  font-size:12.5px;color:var(--ink-2);background:var(--surface-2);border-radius:10px;
+  padding:9px 12px;overflow-wrap:anywhere;
+}
+.phases{display:grid;grid-template-columns:repeat(auto-fill,minmax(168px,1fr));gap:4px 16px;margin-top:2px}
+.phase{display:flex;align-items:center;gap:8px;padding:4px 0;font-size:12.5px;color:var(--ink-3);min-width:0}
+.phase b{
+  flex:none;width:20px;height:20px;border-radius:6px;display:grid;place-items:center;
+  font:600 10.5px var(--font-mono);background:var(--surface-2);color:var(--ink-3);
+}
+.phase span{font-weight:600;white-space:nowrap}
+.phase em{margin-left:auto;font-style:normal;font-family:var(--font-mono);font-size:11.5px;font-variant-numeric:tabular-nums;white-space:nowrap}
+.phase.done{color:var(--ink-2)}
+.phase.done b{background:color-mix(in srgb,var(--accent) 16%,transparent);color:var(--accent-ink)}
+.phase.active{color:var(--ink)}
+.phase.active b{background:var(--accent);color:#fff}
+.phase.active em{color:var(--accent-ink);font-weight:600}
+.phase.fail{color:var(--crit-ink)}
+.phase.fail b{background:var(--crit);color:#fff}
+.phase.skipped span{text-decoration:line-through}
+
+/* ---------- resumos ---------- */
+.tiles{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px;grid-auto-rows:1fr}
+.tile{padding:16px;display:flex;flex-direction:column;gap:6px}
+.tile h2{font-size:12.5px;font-weight:600;color:var(--ink-3)}
+.tile .big{font-size:28px;font-weight:800;letter-spacing:-.02em;line-height:1.1;font-variant-numeric:tabular-nums}
+.tile .big small{font-size:15px;font-weight:600;color:var(--ink-3);letter-spacing:0}
+.tile .sub{font-size:12.5px;color:var(--ink-2)}
+.tile .viz{margin-top:auto;padding-top:8px}
+.gauge{position:relative;width:100%;max-width:150px}
+.gauge svg{display:block;width:100%;height:auto}
+.gauge .g-track{fill:none;stroke:var(--surface-2);stroke-width:11;stroke-linecap:round}
+.gauge .g-val{fill:none;stroke:var(--accent);stroke-width:11;stroke-linecap:round}
+.gauge span{position:absolute;left:0;right:0;bottom:-2px;text-align:center;font-size:24px;font-weight:800;letter-spacing:-.02em;font-variant-numeric:tabular-nums}
+.dots{display:flex;flex-wrap:wrap;gap:6px}
+.dots i{width:14px;height:14px;border-radius:50%;background:var(--surface-2);border:1px solid var(--line)}
+.dots i.on{background:var(--accent);border-color:var(--accent);box-shadow:0 0 0 3px color-mix(in srgb,var(--accent) 22%,transparent)}
+.outcomes{display:flex;flex-wrap:wrap;gap:5px}
+.spark{display:block;width:100%;height:40px}
+.spark rect{fill:var(--accent)}
+.spark rect.zero{fill:var(--line)}
+.spark rect.fail{fill:var(--crit)}
+.spark-axis{display:flex;justify-content:space-between;font-size:10.5px;color:var(--ink-3);margin-top:3px}
+
+/* ---------- slices ---------- */
+.slices{display:flex;flex-direction:column}
+.slice{display:grid;grid-template-columns:34px minmax(0,1fr) auto;gap:4px 12px;align-items:center;padding:9px 0;border-top:1px solid var(--line)}
+.slice:first-child{border-top:0;padding-top:0}
+.slice .sid{font:600 12px var(--font-mono);color:var(--ink-3)}
+.slice .sname{font-weight:600;font-size:13.5px;overflow-wrap:anywhere}
+.slice .scount{font:500 12.5px var(--font-mono);font-variant-numeric:tabular-nums;color:var(--ink-2);display:flex;align-items:center;gap:6px}
+.slice .bar{grid-column:2 / 4;display:flex;gap:3px}
+.slice .bar i{flex:1;height:8px;border-radius:4px;background:var(--surface-2)}
+.slice .bar i.done{background:var(--accent)}
+.slice .bar i.doing{
+  background:repeating-linear-gradient(-45deg,var(--accent) 0 5px,color-mix(in srgb,var(--accent) 45%,var(--surface)) 5px 10px);
+  background-size:28.3px 100%;animation:stripes 1.2s linear infinite;
+}
+.slice.is-active .sid{color:var(--accent-ink)}
+.slice.is-done .sname{color:var(--ink-2)}
+.tick{display:inline-grid;place-items:center;width:16px;height:16px;border-radius:50%;background:color-mix(in srgb,var(--good) 18%,transparent);color:var(--good-ink);font-size:10px;font-weight:800}
+@keyframes stripes{to{background-position:28.3px 0}}
+
+/* ---------- agentes ---------- */
+.agents{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:10px}
+.agent{
+  position:relative;display:flex;gap:11px;align-items:flex-start;
+  padding:12px;border:1px solid var(--line);border-radius:14px;background:var(--surface);min-width:0;overflow:hidden;
+}
+.agent .avatar{
+  flex:none;width:36px;height:36px;border-radius:11px;display:grid;place-items:center;
+  font:600 12px var(--font-mono);color:var(--ink);background:var(--surface-2);
+}
+.agent .avatar[data-model="opus"]{background:color-mix(in srgb,var(--m-opus) 18%,var(--surface))}
+.agent .avatar[data-model="sonnet"]{background:color-mix(in srgb,var(--m-sonnet) 18%,var(--surface))}
+.agent .avatar[data-model="haiku"]{background:color-mix(in srgb,var(--m-haiku) 18%,var(--surface))}
+.agent-main{min-width:0;display:flex;flex-direction:column;gap:3px;flex:1}
+.agent-top{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.agent-top strong{font:600 13px var(--font-mono);overflow-wrap:anywhere}
+.agent-status{display:flex;align-items:center;gap:6px;font-size:12px;font-weight:600;color:var(--ink-3)}
+.agent-status i{width:7px;height:7px;border-radius:50%;background:var(--ink-3);opacity:.5}
+.agent-detail{font-size:11.5px;color:var(--ink-3);overflow-wrap:anywhere;line-height:1.4}
+.agent.is-working{border-color:color-mix(in srgb,var(--accent) 55%,var(--line));background:color-mix(in srgb,var(--accent) 6%,var(--surface))}
+.agent.is-working .agent-status{color:var(--accent-ink)}
+.agent.is-working .agent-status i{background:var(--accent);opacity:1;animation:ping-a 1.6s infinite}
+.agent.is-working .agent-detail{color:var(--ink-2)}
+.agent.is-working::after{
+  content:"";position:absolute;left:0;bottom:0;height:2px;width:40%;
+  background:linear-gradient(90deg,transparent,var(--accent),transparent);animation:slide 1.8s ease-in-out infinite;
+}
+@keyframes ping-a{0%{box-shadow:0 0 0 0 color-mix(in srgb,var(--accent) 55%,transparent)}70%,100%{box-shadow:0 0 0 6px transparent}}
+@keyframes slide{from{transform:translateX(-100%)}to{transform:translateX(250%)}}
+
+/* ---------- spec review ---------- */
+.rv{display:grid;grid-template-columns:70px minmax(120px,1fr) 44px 48px auto;gap:6px 14px;align-items:center}
+.rv-head{font-size:11.5px;font-weight:600;color:var(--ink-3);padding-bottom:6px}
+.rv-head .num,.rv .num{text-align:right}
+.rv-axis{position:relative;height:16px;font:500 10.5px var(--font-mono);color:var(--ink-3)}
+.rv-axis span{position:absolute;top:0;transform:translateX(-50%);white-space:nowrap}
+.rv-axis span:first-child{transform:none}
+.rv-axis span:last-child{transform:translateX(-100%)}
+.rv-axis .g{color:var(--ink);font-weight:600}
+.rv-row{display:contents}
+.rv-row > *{padding-top:4px}
+.rv-sep{grid-column:1 / -1;height:1px;background:var(--line)}
+.rv-slice{font:600 12.5px var(--font-mono)}
+.rv-slice small{display:block;font:500 11px var(--font-ui);color:var(--ink-3)}
+.rv-track-cell{align-self:stretch;display:flex;align-items:center}
+.rv-track{position:relative;height:10px;width:100%;border-radius:5px;background:var(--surface-2)}
+.rv-fill{position:absolute;left:0;top:0;bottom:0;border-radius:5px;background:var(--good)}
+.rv-fill.fail{background:var(--crit)}
+.rv-gate{position:absolute;top:-6px;bottom:-6px;width:2px;margin-left:-1px;background:var(--ink);border-radius:1px}
+.rv-vote{position:absolute;top:50%;width:9px;height:9px;margin:-4.5px 0 0 -4.5px;border-radius:50%;background:var(--ink);border:2px solid var(--surface)}
+.rv .val{font:600 13.5px var(--font-mono);font-variant-numeric:tabular-nums}
+.rv .conf{font:500 12.5px var(--font-mono);font-variant-numeric:tabular-nums;color:var(--ink-2)}
+.rv-reason{grid-column:2 / -1;font-size:12.5px;color:var(--ink-2);padding-bottom:6px}
+.rv-legend{display:flex;flex-wrap:wrap;gap:6px 16px;margin-top:6px;padding-top:12px;border-top:1px solid var(--line);font-size:11.5px;color:var(--ink-3)}
+.rv-legend span{display:inline-flex;align-items:center;gap:6px}
+.rv-legend i{display:inline-block}
+.lg-bar{width:16px;height:8px;border-radius:4px;background:var(--good)}
+.lg-bar.fail{background:var(--crit)}
+.lg-gate{width:2px;height:14px;background:var(--ink)}
+.lg-vote{width:9px;height:9px;border-radius:50%;background:var(--ink)}
+
+/* ---------- commits ---------- */
+.commits{display:flex;flex-direction:column}
+.commit{display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:2px 12px;align-items:baseline;padding:10px 0;border-top:1px solid var(--line)}
+.commit:first-child{border-top:0;padding-top:0}
+.commit .hash{font:500 12px var(--font-mono);color:var(--accent-ink);background:color-mix(in srgb,var(--accent) 12%,transparent);padding:3px 7px;border-radius:7px}
+.commit .msg{font-size:13px;font-weight:600;overflow-wrap:anywhere}
+.commit .when{font-size:12px;color:var(--ink-3);white-space:nowrap}
+
+/* ---------- eventos ---------- */
+.filters{display:flex;flex-wrap:wrap;gap:6px}
+.filters button{
+  border:1px solid var(--line);background:var(--surface);border-radius:999px;cursor:pointer;
+  padding:5px 11px;font-size:12px;font-weight:600;color:var(--ink-2);display:inline-flex;gap:6px;align-items:center;
+}
+.filters button:hover{border-color:var(--ink-3);color:var(--ink)}
+.filters button[aria-pressed="true"]{background:var(--ink);border-color:var(--ink);color:var(--surface)}
+.filters button span{font-family:var(--font-mono);font-weight:500;opacity:.75}
+.events{display:flex;flex-direction:column}
+.ev{
+  display:grid;grid-template-columns:78px 62px 112px 74px 150px minmax(0,1fr);gap:4px 14px;align-items:center;
+  padding:9px 12px;border-radius:10px;border-left:3px solid transparent;font-size:13px;
+}
+.ev:nth-child(odd){background:var(--surface-2)}
+.ev.fail{border-left-color:var(--crit);background:color-mix(in srgb,var(--crit) 8%,var(--surface))}
+.ev .t{font:500 12px var(--font-mono);font-variant-numeric:tabular-nums;color:var(--ink-3)}
+.ev .ph{font:600 11.5px var(--font-mono);color:var(--ink)}
+.ev .tk{font:500 12px var(--font-mono);color:var(--ink-2)}
+.ev .ag{font:500 12px var(--font-mono);color:var(--ink-2);overflow-wrap:anywhere}
+.ev .msg{color:var(--ink);overflow-wrap:anywhere}
+.ev.fail .msg{color:var(--crit-ink)}
+
+/* ---------- tooltip ---------- */
+#tip{
+  position:fixed;z-index:10;pointer-events:none;max-width:280px;
+  background:var(--ink);color:var(--surface);font-size:12px;font-weight:600;line-height:1.35;
+  padding:7px 10px;border-radius:9px;box-shadow:0 8px 22px -8px rgba(0,0,0,.4);
+}
+[data-tip]{cursor:default}
+
+/* ---------- nav de páginas ---------- */
+.tabs{display:flex;flex-wrap:wrap;gap:4px;background:var(--surface);border:1px solid var(--line);border-radius:999px;padding:4px;width:fit-content;max-width:100%}
+.tabs a{text-decoration:none;padding:7px 16px;border-radius:999px;font-weight:600;font-size:13px;color:var(--ink-2)}
+.tabs a:hover{color:var(--ink);background:var(--surface-2)}
+.tabs a[aria-current="page"]{background:var(--accent);color:#fff}
+[hidden]{display:none !important}
+main:not([data-page="agora"]) > .card{grid-column:span 12}
+
+/* ---------- responsivo ---------- */
+@media (max-width:1180px){
+  .s8,.s7,.s5,.s4{grid-column:span 12}
+  .tiles{grid-template-columns:repeat(4,minmax(0,1fr))}
+}
+@media (max-width:760px){
+  .now{grid-template-columns:minmax(0,1fr)}
+  .tiles{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .ev{grid-template-columns:auto auto auto minmax(0,1fr);row-gap:6px}
+  .ev .ag{grid-column:1 / -1;order:5}
+  .ev .msg{grid-column:1 / -1;order:6}
+  .rv{grid-template-columns:54px minmax(80px,1fr) 34px auto;column-gap:10px}
+  .rv .conf,.rv-head .c-conf{display:none}
+}
+@media (prefers-reduced-motion:reduce){
+  *,*::before,*::after{animation:none !important}
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header class="top">
+    <div class="brand">
+      <svg width="34" height="34" viewBox="0 0 34 34" aria-hidden="true">
+        <circle cx="17" cy="17" r="12" fill="none" stroke="var(--line)" stroke-width="5"/>
+        <circle cx="17" cy="17" r="12" fill="none" stroke="var(--accent)" stroke-width="5" stroke-linecap="round" pathLength="100" stroke-dasharray="38 100" transform="rotate(-90 17 17)"/>
+        <circle cx="17" cy="17" r="3" fill="var(--accent)"/>
+      </svg>
+      <div>
+        <h1 id="projName">TalentVisor</h1>
+        <p id="projSub">Live Ops</p>
+      </div>
+    </div>
+    <div class="top-tools">
+      <div class="live" id="live"><i></i><span id="liveLabel">ao vivo</span><time id="clock">--:--:--</time></div>
+      <button class="icon-btn" id="themeBtn" type="button" aria-label="Alternar tema claro e escuro" data-tip="Alternar tema">
+        <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><path d="M8 1.5a6.5 6.5 0 1 0 0 13z" fill="currentColor"/><circle cx="8" cy="8" r="6.5" fill="none" stroke="currentColor" stroke-width="1.5"/></svg>
+      </button>
+    </div>
+  </header>
+
+  <nav class="tabs" aria-label="Páginas">
+    <a href="#agora" data-go="agora">Agora</a>
+    <a href="#slices" data-go="slices">Slices</a>
+    <a href="#agentes" data-go="agentes">Agentes</a>
+    <a href="#review" data-go="review">Spec review</a>
+    <a href="#commits" data-go="commits">Commits</a>
+    <a href="#eventos" data-go="eventos">Eventos</a>
+  </nav>
+
+  <main class="grid" id="main" data-page="agora">
+    <section class="card now s8" id="now" aria-label="Agora" data-page="agora"></section>
+
+    <div class="tiles s4" id="tiles" data-page="agora"></div>
+
+    <section class="card s5" aria-labelledby="hSlices" data-page="slices">
+      <div class="card-head"><h2 id="hSlices">Slices</h2><span class="aside mono" id="slicesAside"></span></div>
+      <ul class="slices" id="slices"></ul>
+    </section>
+
+    <section class="card s7" aria-labelledby="hAgents" data-page="agentes">
+      <div class="card-head"><h2 id="hAgents">Agentes</h2><span class="aside" id="agentsAside"></span></div>
+      <ul class="agents" id="agents"></ul>
+    </section>
+
+    <section class="card s7" aria-labelledby="hReview" data-page="review">
+      <div class="card-head"><h2 id="hReview">Spec review</h2><span class="aside" id="reviewAside"></span></div>
+      <div id="reviews"></div>
+    </section>
+
+    <section class="card s5" aria-labelledby="hCommits" data-page="commits">
+      <div class="card-head"><h2 id="hCommits">Commits</h2><span class="aside mono" id="commitsAside"></span></div>
+      <ul class="commits" id="commits"></ul>
+    </section>
+
+    <section class="card s12" aria-labelledby="hEvents" data-page="eventos">
+      <div class="card-head"><h2 id="hEvents">Eventos</h2><div class="filters" id="filters" role="group" aria-label="Filtrar eventos"></div></div>
+      <ol class="events" id="events"></ol>
+    </section>
+  </main>
+</div>
+<div id="tip" hidden></div>
+
+<script>
+/* =====================================================================
+   1. CONFIGURAÇÃO
+   ===================================================================== */
+const CONFIG = {
+  // JSON no formato de STATE, montado por scripts/ops.py a partir de ops/events.jsonl
+  source: "/state.json",
+  pollMs: 1000,        // intervalo de leitura
+  sparkMinutes: 12,    // janela do gráfico de eventos por minuto
+  maxEvents: 200,      // linhas máximas na lista de eventos
+};
+
+/* =====================================================================
+   2. FORMATO DO ESTADO
+   Todos os horários aceitam ISO ("2026-11-24T20:24:09-03:00") ou epoch ms.
+
+   {
+     project: "TalentVisor",            // nome no topo
+     loop: "agent loop",                // subtítulo
+     gate: 75,                          // confiança mínima do spec review (%)
+     phases: ["SYNC","PICK", ...],      // etapas do loop, na ordem
+     current: {                         // null quando o loop está parado
+       task, title, slice,              // id da task (T-xx ou S<n>), título e slice
+       phase,                           // uma das phases
+       status: "start" | "fail",
+       agent, since, detail,            // since = início da etapa
+       size,                            // opcional: "classe S|M|L"
+       skipped: [phase]                 // opcional: etapas puladas
+     },
+     agents:  [{ name, model: "opus"|"sonnet"|"haiku", status: "working"|"idle",
+                 detail, since }],      // since = início (working) ou fim da última atividade (idle)
+     slices:  [{ id, name, done, total }],
+     reviews: [{ slice, attempt, score, conf, pass, reason, ts,
+                 votes: { otimista, neutra, pessimista } }],   // votes é opcional
+     commits: [{ hash, msg, slice, ts }],
+     events:  [{ ts, task, phase, agent, status: "start"|"ok"|"fail", msg }]
+   }
+   ===================================================================== */
+const DEFAULT_PHASES = ["SYNC","PICK","SPEC","SIZE","BUILD","VERIFY","REVIEW","FIX","CLOSE","SPEC REVIEW","COMMIT"];
+
+/* =====================================================================
+   3. UTILITÁRIOS
+   ===================================================================== */
+const $ = (id)=>document.getElementById(id);
+const esc = (s)=>String(s ?? "").replace(/[&<>"']/g,(c)=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const toMs = (v)=> v==null ? null : (typeof v==="number" ? v : Date.parse(v));
+const pad = (n)=>String(n).padStart(2,"0");
+const fmtTime = (ms)=>{ const d=new Date(ms); return `${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`; };
+const fmtHM = (ms)=>{ const d=new Date(ms); return `${pad(d.getHours())}:${pad(d.getMinutes())}`; };
+function fmtClock(ms){            // cronômetro 00:24
+  const s=Math.max(0,Math.floor(ms/1000)), h=Math.floor(s/3600), m=Math.floor(s%3600/60);
+  return (h?`${h}:`:"")+`${pad(m)}:${pad(s%60)}`;
+}
+function fmtDur(ms){              // duração 3 min 07 s
+  if(ms<1000) return "<1 s";
+  const s=Math.round(ms/1000); if(s<60) return `${s} s`;
+  const m=Math.floor(s/60); if(m<60) return `${m} min ${pad(s%60)} s`;
+  return `${Math.floor(m/60)} h ${pad(m%60)} min`;
+}
+function fmtAgo(ms){              // há 3 min
+  const s=Math.max(0,Math.floor(ms/1000)); if(s<60) return `há ${s} s`;
+  const m=Math.floor(s/60); if(m<60) return `há ${m} min`;
+  return `há ${Math.floor(m/60)} h ${pad(m%60)} min`;
+}
+const modelKey = (m)=>{ const k=String(m||"").toLowerCase(); return ["opus","sonnet","haiku"].find((x)=>k.includes(x))||""; };
+const initials = (name)=>{ const p=String(name).split(/[-_ ]+/).filter(Boolean).slice(-2); return p.map((x)=>x[0]).join("").toUpperCase(); };
+const STATUS_LABEL = {start:"start",ok:"ok",fail:"falha"};
+const STATUS_GLYPH = {start:"▸",ok:"✓",fail:"✕"};
+
+function normalize(raw){
+  const s = {...raw};
+  s.project = s.project || "TalentVisor";
+  s.loop = s.loop || "agent loop";
+  s.gate = Number.isFinite(+s.gate) ? +s.gate : 75;
+  s.phases = Array.isArray(s.phases)&&s.phases.length ? s.phases : DEFAULT_PHASES;
+  s.agents = (s.agents||[]).map((a)=>({...a,since:toMs(a.since)}));
+  s.slices = s.slices||[];
+  s.reviews = (s.reviews||[]).map((r)=>({...r,ts:toMs(r.ts)})).sort((a,b)=>(b.ts||0)-(a.ts||0));
+  s.commits = (s.commits||[]).map((c)=>({...c,ts:toMs(c.ts)})).sort((a,b)=>(b.ts||0)-(a.ts||0));
+  s.events = (s.events||[]).map((e,i)=>({...e,ts:toMs(e.ts),_i:i})).sort((a,b)=>(b.ts-a.ts)||(a._i-b._i));
+  s.current = s.current ? {...s.current,since:toMs(s.current.since)} : null;
+  return s;
+}
+
+/* =====================================================================
+   4. RENDER
+   ===================================================================== */
+let state = null;
+const ui = { filter:"all" };
+
+function phaseInfo(s){
+  const cur = s.current, idx = cur ? s.phases.indexOf(cur.phase) : -1;
+  const evs = cur ? s.events.filter((e)=>e.task===cur.task) : [];
+  return s.phases.map((name,i)=>{
+    let st = "pending";
+    if(cur){
+      if(i<idx) st = (cur.skipped||[]).includes(name) ? "skipped" : "done";
+      else if(i===idx) st = cur.status==="fail" ? "fail" : "active";
+    }
+    const pe = evs.filter((e)=>e.phase===name).sort((a,b)=>a.ts-b.ts);
+    const start = pe.find((e)=>e.status==="start");
+    const end = [...pe].reverse().find((e)=>e.status!=="start");
+    let dur = null;
+    if(start&&end&&end.ts>=start.ts) dur = end.ts-start.ts; else if(end) dur = 0;
+    return {name,i,st,dur};
+  });
+}
+
+function ringSVG(info){
+  const n=info.length, cx=120, cy=120, r=96, gap=n>1?4:0;
+  const pt=(a)=>{ const rad=a*Math.PI/180; return [cx+r*Math.cos(rad), cy+r*Math.sin(rad)]; };
+  const stLabel={done:"concluída",active:"em execução",fail:"falhou",pending:"pendente",skipped:"pulada"};
+  let out="";
+  info.forEach((p,i)=>{
+    const a0=-90+i*360/n+gap/2, a1=-90+(i+1)*360/n-gap/2;
+    const [x0,y0]=pt(a0),[x1,y1]=pt(a1);
+    const d=`M${x0.toFixed(2)} ${y0.toFixed(2)}A${r} ${r} 0 0 1 ${x1.toFixed(2)} ${y1.toFixed(2)}`;
+    if(p.st==="active"||p.st==="fail") out+=`<path class="seg-halo ${p.st}" d="${d}"/>`;
+    const extra = p.st==="done"&&p.dur!=null ? ` · ${fmtDur(p.dur)}` : "";
+    out+=`<path class="seg ${p.st}" d="${d}" data-tip="${i+1} · ${esc(p.name)}: ${stLabel[p.st]}${extra}"/>`;
+    const [tx,ty]=pt((a0+a1)/2);
+    out+=`<text class="seg-n ${p.st}" x="${tx.toFixed(1)}" y="${ty.toFixed(1)}">${i+1}</text>`;
+  });
+  return `<svg viewBox="0 0 240 240" role="img" aria-label="Etapas do loop">${out}</svg>`;
+}
+
+function renderNow(s){
+  const info = phaseInfo(s), cur = s.current, el = $("now");
+  const idx = cur ? s.phases.indexOf(cur.phase) : -1;
+  const center = cur
+    ? `<small>etapa ${idx+1} de ${s.phases.length}</small><strong>${esc(cur.phase)}</strong>
+       <span class="timer ${cur.status==="fail"?"fail":""}" data-since="${cur.since||""}" data-fmt="clock">00:00</span>`
+    : `<small>loop</small><strong>parado</strong>`;
+  const agent = cur ? s.agents.find((a)=>a.name===cur.agent) : null;
+  const list = info.map((p)=>{
+    let right = "";
+    if(p.st==="active"||p.st==="fail") right = `<em data-since="${cur.since||""}" data-fmt="clock">00:00</em>`;
+    else if(p.st==="done") right = `<em>${p.dur!=null?fmtDur(p.dur):"✓"}</em>`;
+    else if(p.st==="skipped") right = `<em>pulada</em>`;
+    return `<li class="phase ${p.st}"><b>${p.i+1}</b><span>${esc(p.name)}</span>${right}</li>`;
+  }).join("");
+  const info_html = cur ? `
+      <div class="now-kicker"><span>Agora</span><span class="pill ${cur.status==="fail"?"fail":"start"}">${cur.status==="fail"?"✕ falhou":"▸ em execução"}</span></div>
+      <h2 class="now-title">${esc(cur.title||cur.task)}</h2>
+      <div class="now-meta">
+        <span class="chip mono">${esc(cur.task)}</span>
+        ${cur.slice?`<span class="chip">slice <span class="mono">${esc(cur.slice)}</span></span>`:""}
+        ${cur.size?`<span class="chip">${esc(cur.size)}</span>`:""}
+        ${cur.agent?`<span class="chip"><span class="mono">${esc(cur.agent)}</span>${agent?`<span class="model" data-model="${modelKey(agent.model)}"><i></i>${esc(agent.model)}</span>`:""}</span>`:""}
+      </div>
+      ${cur.detail?`<p class="now-detail mono">${esc(cur.detail)}</p>`:""}`
+    : `<div class="now-kicker"><span>Agora</span></div>
+       <h2 class="now-title">Nenhuma tarefa em andamento</h2>
+       <p class="muted">O anel volta a girar quando o loop pegar a próxima tarefa.</p>`;
+  el.innerHTML = `
+    <div class="ring">${ringSVG(info)}<div class="ring-center">${center}</div></div>
+    <div class="now-info">${info_html}<ol class="phases">${list}</ol></div>`;
+}
+
+function renderTiles(s){
+  const total = s.slices.reduce((a,x)=>a+(+x.total||0),0), done = s.slices.reduce((a,x)=>a+(+x.done||0),0);
+  const pct = total ? Math.round(done/total*100) : 0;
+  const working = s.agents.filter((a)=>a.status==="working").length;
+  const passed = s.reviews.filter((r)=>r.pass).length;
+  const avg = s.reviews.length ? (s.reviews.reduce((a,r)=>a+(+r.score||0),0)/s.reviews.length).toFixed(1) : null;
+  const fails = s.events.filter((e)=>e.status==="fail").length;
+
+  // eventos por minuto
+  const n = CONFIG.sparkMinutes, now = Date.now(), buckets = Array.from({length:n},()=>({c:0,f:0}));
+  s.events.forEach((e)=>{ const k = n-1-Math.floor((now-e.ts)/60000); if(k>=0&&k<n){ buckets[k].c++; if(e.status==="fail") buckets[k].f++; } });
+  const max = Math.max(1,...buckets.map((b)=>b.c));
+  const bars = buckets.map((b,i)=>{
+    const h = b.c ? Math.max(4,b.c/max*36) : 2, start = now-(n-i)*60000;
+    const tip = `${fmtHM(start)} · ${b.c} evento${b.c===1?"":"s"}${b.f?` (${b.f} falha${b.f===1?"":"s"})`:""}`;
+    return `<rect class="${b.c?(b.f?"fail":""):"zero"}" x="${i*10+1.5}" y="${38-h}" width="7" height="${h}" rx="2" data-tip="${tip}"/>
+            <rect x="${i*10}" y="0" width="10" height="38" fill="transparent" data-tip="${tip}" style="fill:transparent"/>`;
+  }).join("");
+
+  const outcomes = [...s.reviews].reverse().map((r)=>`<span class="pill ${r.pass?"ok":"fail"}" data-tip="${esc(r.slice)}: nota ${r.score}/5 · conf. ${r.conf}%">${r.pass?"✓":"✕"} ${esc(r.slice)}</span>`).join("");
+
+  $("tiles").innerHTML = `
+    <section class="card tile" aria-label="Progresso geral">
+      <h2>Progresso geral</h2>
+      <div class="gauge" data-tip="${done} de ${total} tarefas concluídas">
+        <svg viewBox="0 0 120 68" aria-hidden="true">
+          <path class="g-track" d="M12 60A48 48 0 0 1 108 60" />
+          ${pct>0?`<path class="g-val" d="M12 60A48 48 0 0 1 108 60" pathLength="100" stroke-dasharray="${pct} 100"/>`:""}
+        </svg>
+        <span>${pct}%</span>
+      </div>
+      <p class="sub"><span class="mono">${done}</span> de <span class="mono">${total}</span> tarefas</p>
+    </section>
+    <section class="card tile" aria-label="Agentes">
+      <h2>Agentes trabalhando</h2>
+      <p class="big">${working} <small>de ${s.agents.length}</small></p>
+      <div class="viz dots">${s.agents.map((a)=>`<i class="${a.status==="working"?"on":""}" data-tip="${esc(a.name)}: ${a.status==="working"?"trabalhando":"ocioso"}"></i>`).join("")}</div>
+    </section>
+    <section class="card tile" aria-label="Spec review">
+      <h2>Spec reviews aprovadas</h2>
+      ${s.reviews.length
+        ? `<p class="big">${passed} <small>de ${s.reviews.length}</small></p><p class="sub">nota média <span class="mono">${avg}/5</span> · gate conf. ≥ <span class="mono">${s.gate}%</span></p><div class="viz outcomes">${outcomes}</div>`
+        : `<p class="big">0</p><p class="sub">nenhuma revisão ainda · gate conf. ≥ <span class="mono">${s.gate}%</span></p>`}
+    </section>
+    <section class="card tile" aria-label="Eventos">
+      <h2>Eventos</h2>
+      <p class="big">${s.events.length} <small>${fails?`· ${fails} falha${fails===1?"":"s"}`:"· sem falhas"}</small></p>
+      <div class="viz">
+        <svg class="spark" viewBox="0 0 ${n*10} 38" preserveAspectRatio="none" role="img" aria-label="Eventos por minuto nos últimos ${n} minutos">${bars}</svg>
+        <div class="spark-axis mono"><span>−${n} min</span><span>agora</span></div>
+      </div>
+    </section>`;
+}
+
+function renderSlices(s){
+  const total = s.slices.reduce((a,x)=>a+(+x.total||0),0), done = s.slices.reduce((a,x)=>a+(+x.done||0),0);
+  $("slicesAside").textContent = `${done}/${total} tarefas`;
+  const activeId = s.current && s.current.slice;
+  $("slices").innerHTML = s.slices.length ? s.slices.map((x)=>{
+    const isDone = x.total>0 && x.done>=x.total, isActive = x.id===activeId && !isDone;
+    const segs = Array.from({length:Math.max(1,x.total)},(_,i)=>`<i class="${i<x.done?"done":(isActive&&i===x.done?"doing":"")}"></i>`).join("");
+    return `<li class="slice ${isDone?"is-done":""} ${isActive?"is-active":""}" data-tip="${esc(x.id)} · ${esc(x.name)}: ${x.done} de ${x.total}${isActive?" (em andamento)":""}">
+      <span class="sid">${esc(x.id)}</span><span class="sname">${esc(x.name)}</span>
+      <span class="scount">${isDone?'<span class="tick" aria-label="concluído">✓</span>':""}${x.done}/${x.total}</span>
+      <span class="bar" aria-hidden="true">${segs}</span></li>`;
+  }).join("") : `<li class="empty">Nenhum slice definido.</li>`;
+}
+
+function renderAgents(s){
+  const working = s.agents.filter((a)=>a.status==="working").length;
+  $("agentsAside").textContent = `${working} trabalhando · ${s.agents.length-working} ocioso${s.agents.length-working===1?"":"s"}`;
+  const rank = (a)=> a.status==="working" ? 0 : (a.detail ? 1 : 2);
+  const list = [...s.agents].sort((a,b)=>rank(a)-rank(b) || (b.since||0)-(a.since||0));
+  $("agents").innerHTML = list.length ? list.map((a)=>{
+    const w = a.status==="working", mk = modelKey(a.model);
+    const status = w
+      ? `trabalhando${a.since?` · <span class="mono" data-since="${a.since}" data-fmt="clock">00:00</span>`:""}`
+      : `ocioso${a.since?` · <span data-since="${a.since}" data-fmt="ago"></span>`:""}`;
+    return `<li class="agent ${w?"is-working":""}">
+      <span class="avatar" data-model="${mk}" aria-hidden="true">${esc(initials(a.name))}</span>
+      <div class="agent-main">
+        <div class="agent-top"><strong>${esc(a.name)}</strong>${a.model?`<span class="model" data-model="${mk}"><i></i>${esc(a.model)}</span>`:""}</div>
+        <div class="agent-status"><i></i><span>${status}</span></div>
+        <div class="agent-detail mono">${a.detail?esc(a.detail):"sem atividade neste loop"}</div>
+      </div></li>`;
+  }).join("") : `<li class="empty">Nenhum agente registrado.</li>`;
+}
+
+function renderReviews(s){
+  const g = Math.min(100,Math.max(0,s.gate));
+  $("reviewAside").innerHTML = `gate: confiança ≥ <span class="mono">${g}%</span>`;
+  const head = `
+    <span class="rv-head">slice</span>
+    <span class="rv-head rv-axis" aria-hidden="true"><span style="left:0">0</span><span class="g" style="left:${g}%">gate ${g}</span><span style="left:100%">100</span></span>
+    <span class="rv-head num">nota</span><span class="rv-head num c-conf">conf.</span><span class="rv-head">resultado</span>`;
+  const track = (r)=>{
+    const votes = r && r.votes ? Object.entries(r.votes).map(([k,v])=>`<i class="rv-vote" style="left:${Math.min(100,Math.max(0,v))}%" data-tip="fork ${esc(k)}: conf. ${v}%"></i>`).join("") : "";
+    return `<div class="rv-track" ${r?`data-tip="${esc(r.slice)}: nota ${r.score}/5 · conf. ${r.conf}% · gate ${g}%"`:""}>
+      ${r?`<i class="rv-fill ${r.pass?"":"fail"}" style="width:${Math.min(100,Math.max(0,r.conf))}%"></i>`:""}
+      <i class="rv-gate" style="left:${g}%"></i>${votes}</div>`;
+  };
+  if(!s.reviews.length){
+    $("reviews").innerHTML = `<div class="rv">${head}
+      <i class="rv-sep"></i>
+      <div class="rv-row"><span class="rv-slice muted">–</span><div class="rv-track-cell">${track(null)}</div><span class="val num muted">–</span><span class="conf num muted">–</span><span></span></div></div>
+      <p class="empty" style="margin-top:14px">Nenhuma revisão ainda. As notas aparecem aqui quando o primeiro slice chegar ao spec review.</p>`;
+    return;
+  }
+  const hasVotes = s.reviews.some((r)=>r.votes);
+  const rows = s.reviews.map((r)=>`
+    <i class="rv-sep"></i>
+    <div class="rv-row">
+      <span class="rv-slice">${esc(r.slice)}${r.attempt?`<small>tentativa ${esc(r.attempt)}</small>`:""}</span>
+      <div class="rv-track-cell">${track(r)}</div>
+      <span class="val num">${esc(r.score)}</span>
+      <span class="conf num">${r.conf!=null?esc(r.conf):"–"}</span>
+      <span><span class="pill ${r.pass?"ok":"fail"}">${r.pass?"✓ aprovado":"✕ reprovado"}</span></span>
+    </div>
+    <p class="rv-reason">${esc(r.reason||"")}${r.ts?` <span class="muted mono">· ${fmtTime(r.ts)}</span>`:""}</p>`).join("");
+  $("reviews").innerHTML = `<div class="rv">${head}${rows}</div>
+    <div class="rv-legend">
+      <span><i class="lg-bar"></i>confiança, aprovada</span><span><i class="lg-bar fail"></i>confiança, reprovada</span>
+      <span><i class="lg-gate"></i>gate</span>${hasVotes?`<span><i class="lg-vote"></i>confiança de cada fork</span>`:""}
+    </div>`;
+}
+
+function renderCommits(s){
+  $("commitsAside").textContent = s.commits.length ? `${s.commits.length}` : "";
+  $("commits").innerHTML = s.commits.length ? s.commits.map((c)=>`
+    <li class="commit"><span class="hash">${esc(String(c.hash).slice(0,7))}</span><span class="msg">${esc(c.msg)}</span>
+    <span class="when" ${c.ts?`data-since="${c.ts}" data-fmt="ago" data-tip="${fmtTime(c.ts)}"`:""}></span></li>`).join("")
+    : `<li class="empty">Nenhum commit ainda. O primeiro entra quando uma tarefa passar por COMMIT.</li>`;
+}
+
+function renderEvents(s){
+  const counts = {all:s.events.length,start:0,ok:0,fail:0};
+  s.events.forEach((e)=>{ if(counts[e.status]!=null) counts[e.status]++; });
+  const labels = {all:"Todos",start:"Start",ok:"Ok",fail:"Falhas"};
+  $("filters").innerHTML = Object.keys(labels).map((k)=>`<button type="button" data-filter="${k}" aria-pressed="${ui.filter===k}">${labels[k]} <span>${counts[k]}</span></button>`).join("");
+  const rows = s.events.filter((e)=>ui.filter==="all"||e.status===ui.filter).slice(0,CONFIG.maxEvents);
+  $("events").innerHTML = rows.length ? rows.map((e)=>`
+    <li class="ev ${e.status==="fail"?"fail":""}">
+      <span class="t">${fmtTime(e.ts)}</span>
+      <span><span class="pill ${esc(e.status)}">${STATUS_GLYPH[e.status]||""} ${esc(STATUS_LABEL[e.status]||e.status)}</span></span>
+      <span class="ph">${esc(e.phase)}</span>
+      <span class="tk">${esc(e.task)}</span>
+      <span class="ag">${e.agent?esc(e.agent):'<span class="muted">loop</span>'}</span>
+      <span class="msg">${esc(e.msg)}</span>
+    </li>`).join("") : `<li class="empty">Nenhum evento ${ui.filter==="all"?"ainda":"com esse filtro"}.</li>`;
+}
+
+function render(){
+  if(!state) return;
+  $("projName").textContent = state.project;
+  $("projSub").textContent = `Live Ops · ${state.loop}`;
+  renderNow(state); renderTiles(state); renderSlices(state);
+  renderAgents(state); renderReviews(state); renderCommits(state); renderEvents(state);
+  tick();
+}
+
+/* relógio e cronômetros: atualiza só o texto, sem redesenhar os cards */
+function tick(){
+  const now = Date.now();
+  $("clock").textContent = fmtTime(now);
+  document.querySelectorAll("[data-since]").forEach((el)=>{
+    const since = +el.dataset.since; if(!since) return;
+    el.textContent = el.dataset.fmt==="ago" ? fmtAgo(now-since) : fmtClock(now-since);
+  });
+}
+
+/* =====================================================================
+   5. DADOS: leitura periódica de CONFIG.source
+   ===================================================================== */
+function setLive(mode,label){
+  const el = $("live"); el.className = "live"+(mode==="down"?" is-down":"");
+  $("liveLabel").textContent = label;
+}
+async function poll(){
+  try{
+    const res = await fetch(CONFIG.source,{cache:"no-store"});
+    if(!res.ok) throw new Error(res.status);
+    state = normalize(await res.json());
+    setLive("live","ao vivo");
+    render();
+  }catch(err){
+    setLive("down","sem conexão");
+  }
+}
+
+poll(); setInterval(poll,CONFIG.pollMs);
+setInterval(tick,1000);
+
+/* =====================================================================
+   6. INTERAÇÃO
+   ===================================================================== */
+const PAGES = ["agora","slices","agentes","review","commits","eventos"];
+function go(p){
+  if(!PAGES.includes(p)) p = "agora";
+  $("main").dataset.page = p;
+  document.querySelectorAll("main > [data-page]").forEach((el)=>{ el.hidden = el.dataset.page!==p; });
+  document.querySelectorAll("[data-go]").forEach((a)=>a.setAttribute("aria-current", a.dataset.go===p ? "page" : "false"));
+  tipEl.hidden = true;
+}
+addEventListener("hashchange",()=>go(location.hash.slice(1)));
+document.addEventListener("click",(e)=>{
+  const f = e.target.closest("[data-filter]");
+  if(f){ ui.filter = f.dataset.filter; renderEvents(state); return; }
+  if(e.target.closest("#themeBtn")){
+    const root = document.documentElement;
+    const dark = root.dataset.theme ? root.dataset.theme==="dark" : matchMedia("(prefers-color-scheme: dark)").matches;
+    root.dataset.theme = dark ? "light" : "dark";
+  }
+});
+
+const tipEl = $("tip");
+document.addEventListener("pointermove",(e)=>{
+  const el = e.target.closest ? e.target.closest("[data-tip]") : null;
+  if(!el){ tipEl.hidden = true; return; }
+  tipEl.textContent = el.dataset.tip; tipEl.hidden = false;
+  const w = tipEl.offsetWidth, h = tipEl.offsetHeight;
+  let x = e.clientX+14, y = e.clientY+16;
+  if(x+w>innerWidth-8) x = e.clientX-w-10;
+  if(y+h>innerHeight-8) y = e.clientY-h-12;
+  tipEl.style.left = Math.max(8,x)+"px"; tipEl.style.top = Math.max(8,y)+"px";
+});
+document.addEventListener("pointerleave",()=>{ tipEl.hidden = true; });
+window.addEventListener("scroll",()=>{ tipEl.hidden = true; },{passive:true});
+go(location.hash.slice(1));
+</script>
+</body>
+</html>
