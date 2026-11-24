@@ -1,0 +1,13 @@
+.env
+data/
+*.mp4
+*.mov
+*.webm
+*.mp3
+*.zip
+*.db
+__pycache__/
+.venv/
+.pytest_cache/
+.ruff_cache/
+graphify-out/

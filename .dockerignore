@@ -1,0 +1,6 @@
+.env
+data/
+*.mp4
+*.zip
+.git/
+graphify-out/
