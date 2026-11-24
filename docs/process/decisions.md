@@ -23,6 +23,8 @@ Formato: `D-NNN | data | decisão. why: … alt: … revisit: …`
 - D-017 | 24/11 | .env NEVER READ: regra 0 do CLAUDE.md + deny em .claude/settings.json (Read/Edit/cat/grep/printenv/compose config). why: segredo. chaves só via env_file no container.
 - D-018 | 24/11 | M5 = gemini-4-hydrogen, fallback gemini-3.5-flash-lite (mesma família, ≠ gpt-oss). why: smoke test 200 nos dois; 2.5-flash depreciado; 3.8-flash instável (503/timeout). revisit: 429 frequente.
 - D-019 | 24/11 | chamadas HTTP cruas p/ Groq precisam User-Agent próprio (Cloudflare dá 403 p/ Python-urllib). openai SDK já manda UA. why: smoke test.
+- D-020 | 24/11 | gate SPEC REVIEW no fim de toda slice, antes do commit: tv-spec-reviewer (Opus, persona Dev Senior) dispara 3 forks (otimista, neutra, pessimista) e é a 4ª visão (modesta). nota 0-5 + confiança. ≥75% PASS; 50–74% REVISE (tv-architect corrige, nova revisão, máx. 2 voltas); <50% HUMAN. why: pedido Felipe. alt: revisão única (viés de uma visão só).
+- D-021 | 24/11 | live ops dash: orquestrador grava eventos em ops/events.jsonl via scripts/ops.py log; `make ops` serve o dash (stdlib, Docker, :8001, refresh 1 s). novo alvo `ops` no Makefile (emenda D-012/REQ-NF-07). why: Felipe acompanhar o loop ao vivo. alt: hooks do Claude Code (dependem do cwd da sessão; não sabem passo/nota). ops/ fora do git.
 
 <!-- backlinks:start -->
 ---

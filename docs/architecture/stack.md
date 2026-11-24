@@ -91,6 +91,7 @@ O plano B, se o front travar, é o Gradio, que reaproveita o mesmo `pipeline.py`
 | `logs` | `docker compose logs -f app` |
 | `test` | pytest (`LLM_MODE=mock`) + ruff + `scripts/docs_links.py --check` dentro do container; `T=tests/x.py` roda um arquivo só |
 | `import` | `make import ZIP=../Dataset_Advogados_Jr_Completo.zip`: monta o zip como read-only e importa |
+| `ops` | sobe o dash de live ops do loop de agentes em http://localhost:8001 (refresh 1 s; [D-021](../process/decisions.md)) |
 
 <!-- backlinks:start -->
 ---

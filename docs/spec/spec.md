@@ -196,7 +196,7 @@ Priority: **P0** is MVP, **P1** if time allows, **P2** is extra.
 | REQ-NF-04 | Upload: size limit, uuid names, no path traversal; Jinja autoescape (XSS) |
 | REQ-NF-05 | `make test` green (pytest + ruff) before a task is closed |
 | REQ-NF-06 | **Portable**: a machine with only Docker runs everything via `make up`; one CPU image (amd64 and arm64); STT and spaCy models baked in at build time; no host Python needed |
-| REQ-NF-07 | **Makefile**: bare `make` prints help; targets `up`, `down`, `status`, `health`, `logs`, `test`, `import`, and only these |
+| REQ-NF-07 | **Makefile**: bare `make` prints help; targets `up`, `down`, `status`, `health`, `logs`, `test`, `import`, `ops`, and only these (`ops` = dev-only live ops dashboard, D-021) |
 
 ### 5.4 Quality (agent evaluation)
 

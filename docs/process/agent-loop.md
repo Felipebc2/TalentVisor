@@ -24,6 +24,7 @@ Ordem de autoridade: [CLAUDE.md](../../CLAUDE.md) > [SPEC](../spec/spec.md) > [S
 | `tv-architect` | Opus | PLAN, BRAINSTORM, DECIDE, REVIEW-L, WRITE-PROMPTS | `caveman` (decisões), `ponytail:ponytail-review`, `ponytail:ponytail-audit`, Graphify |
 | `tv-builder` | Sonnet | BUILD, REVIEW-M | `ponytail:ponytail`, `ponytail:ponytail-review`, Graphify, Serena |
 | `tv-runner` | Haiku | RUN (ler, testar, setup, edição pequena) | Bash, Read, Edit |
+| `tv-spec-reviewer` | Opus | SPEC REVIEW (fim de slice) | 3 forks Opus (otimista, neutra, pessimista) + síntese modesta |
 
 ## Classificação por tamanho (define quem constrói e quem revisa)
 
@@ -52,7 +53,12 @@ flowchart TD
   S6 -- CHANGES --> S7[7 FIX<br/>builder, máx. 2 voltas]
   S7 --> S5
   S7 -- 3ª falha --> E[architect DECIDE<br/>simplificar, mudar SPEC ou perguntar ao Felipe]
-  S8 --> S1
+  S8 --> L{última task<br/>da slice?}
+  L -- não --> S1
+  L -- sim --> R{9 SPEC REVIEW<br/>spec-reviewer + 3 forks}
+  R -- "≥75% PASS" --> C[commit da slice] --> S1
+  R -- "50–74% REVISE" --> A[architect DECIDE<br/>aplica AÇÕES] --> R
+  R -- "<50% HUMAN" --> H[para e pergunta ao Felipe]
 ```
 
 | Passo | Quem | O que acontece | Sai com |
@@ -66,6 +72,19 @@ flowchart TD
 | 6 REVIEW | builder novo / architect | REVIEW-M ou REVIEW-L | APPROVE, CHANGES ou ESCALATE |
 | 7 FIX | builder | aplica os CHANGES; volta ao 5; **limite de 2 voltas** | n/a |
 | 8 CLOSE | runner + orquestrador | `[x]` no [Slices](../plan/slices.md), `graphify update .`; o **orquestrador** faz um commit local (mensagem em inglês, sem co-author, sem push) | task fechada |
+| 9 SPEC REVIEW | tv-spec-reviewer (Opus) | só na **última task da slice**. Dispara os 3 forks com os prompts prontos do agente e sintetiza a visão modesta: `NOTA x/5`, `CONFIANÇA %`, `MOTIVO`, `AÇÕES`, `GATE`. **PASS** (≥ 75%) → commit `docs(spec): review S<n>` se houve ajuste e segue para a próxima slice. **REVISE** (50–74%) → tv-architect DECIDE aplica as AÇÕES e o gate roda de novo (máx. 2 voltas, depois HUMAN). **HUMAN** (< 50%) → para e pergunta ao Felipe ([D-020](decisions.md)) | slice fechada |
+
+### Live ops (o que o Felipe vê)
+
+Cada passo acima gera um evento em `ops/events.jsonl` (fora do git), gravado pelo orquestrador:
+
+```bash
+python3 scripts/ops.py log task=T-03 step=BUILD agent=tv-builder model=sonnet status=start msg="db.py"
+```
+
+- `status`: `start`, `ok`, `fail`, `changes`, `approve`, `pass`, `revise`, `human`.
+- Na revisão da SPEC: `step=SPEC_REVIEW score=4.2 conf=80 gate=PASS`. No commit: `step=COMMIT msg=<hash> <assunto>`.
+- `make ops` serve o dash em http://localhost:8001 (refresh 1 s), com o loop, os agentes ativos, o progresso das slices, as notas de SPEC e o feed de eventos ([D-021](decisions.md)).
 
 ### Pacote da task (o que o orquestrador envia)
 
