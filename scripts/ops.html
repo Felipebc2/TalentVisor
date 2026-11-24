@@ -83,9 +83,9 @@ button{font:inherit;color:inherit}
 .muted{color:var(--ink-3)}
 
 .wrap{
-  max-width:1600px;margin:0 auto;
-  padding:18px clamp(16px,2.4vw,32px) 40px;
-  display:flex;flex-direction:column;gap:16px;
+  height:100vh;height:100dvh;
+  padding:14px clamp(16px,1.6vw,28px) 16px;
+  display:flex;flex-direction:column;gap:14px;
 }
 
 /* ---------- topo ---------- */
@@ -347,7 +347,19 @@ button{font:inherit;color:inherit}
 .tabs a:hover{color:var(--ink);background:var(--surface-2)}
 .tabs a[aria-current="page"]{background:var(--accent);color:#fff}
 [hidden]{display:none !important}
-main:not([data-page="agora"]) > .card{grid-column:span 12}
+/* a página ocupa a janela inteira: o grid estica e cada card rola por dentro */
+.top .brand{margin-right:12px}
+.top .tabs{margin-right:auto}
+main.grid{flex:1;min-height:0;grid-template-rows:auto minmax(0,1fr)}
+main[data-page="historico"]{grid-template-rows:minmax(0,1fr) minmax(0,1.15fr)}
+main.grid > .card:not(.now){display:flex;flex-direction:column;min-height:0}
+main.grid > .card:not(.now) > :last-child{flex:1;min-height:0;overflow:auto}
+.agents{align-content:start}
+@media (max-width:1180px),(max-height:640px){
+  .wrap{height:auto}
+  main.grid{grid-template-rows:none !important}
+  main.grid > .card:not(.now) > :last-child{overflow:visible}
+}
 
 /* ---------- responsivo ---------- */
 @media (max-width:1180px){
@@ -383,6 +395,10 @@ main:not([data-page="agora"]) > .card{grid-column:span 12}
         <p id="projSub">Live Ops</p>
       </div>
     </div>
+    <nav class="tabs" aria-label="Páginas">
+      <a href="#operacao" data-go="operacao">Operação</a>
+      <a href="#historico" data-go="historico">Histórico</a>
+    </nav>
     <div class="top-tools">
       <div class="live" id="live"><i></i><span id="liveLabel">ao vivo</span><time id="clock">--:--:--</time></div>
       <button class="icon-btn" id="themeBtn" type="button" aria-label="Alternar tema claro e escuro" data-tip="Alternar tema">
@@ -391,41 +407,32 @@ main:not([data-page="agora"]) > .card{grid-column:span 12}
     </div>
   </header>
 
-  <nav class="tabs" aria-label="Páginas">
-    <a href="#agora" data-go="agora">Agora</a>
-    <a href="#slices" data-go="slices">Slices</a>
-    <a href="#agentes" data-go="agentes">Agentes</a>
-    <a href="#review" data-go="review">Spec review</a>
-    <a href="#commits" data-go="commits">Commits</a>
-    <a href="#eventos" data-go="eventos">Eventos</a>
-  </nav>
+  <main class="grid" id="main" data-page="operacao">
+    <section class="card now s8" id="now" aria-label="Agora" data-page="operacao"></section>
 
-  <main class="grid" id="main" data-page="agora">
-    <section class="card now s8" id="now" aria-label="Agora" data-page="agora"></section>
+    <div class="tiles s4" id="tiles" data-page="operacao"></div>
 
-    <div class="tiles s4" id="tiles" data-page="agora"></div>
-
-    <section class="card s5" aria-labelledby="hSlices" data-page="slices">
+    <section class="card s5" aria-labelledby="hSlices" data-page="operacao">
       <div class="card-head"><h2 id="hSlices">Slices</h2><span class="aside mono" id="slicesAside"></span></div>
       <ul class="slices" id="slices"></ul>
     </section>
 
-    <section class="card s7" aria-labelledby="hAgents" data-page="agentes">
+    <section class="card s7" aria-labelledby="hAgents" data-page="operacao">
       <div class="card-head"><h2 id="hAgents">Agentes</h2><span class="aside" id="agentsAside"></span></div>
       <ul class="agents" id="agents"></ul>
     </section>
 
-    <section class="card s7" aria-labelledby="hReview" data-page="review">
+    <section class="card s7" aria-labelledby="hReview" data-page="historico">
       <div class="card-head"><h2 id="hReview">Spec review</h2><span class="aside" id="reviewAside"></span></div>
       <div id="reviews"></div>
     </section>
 
-    <section class="card s5" aria-labelledby="hCommits" data-page="commits">
+    <section class="card s5" aria-labelledby="hCommits" data-page="historico">
       <div class="card-head"><h2 id="hCommits">Commits</h2><span class="aside mono" id="commitsAside"></span></div>
       <ul class="commits" id="commits"></ul>
     </section>
 
-    <section class="card s12" aria-labelledby="hEvents" data-page="eventos">
+    <section class="card s12" aria-labelledby="hEvents" data-page="historico">
       <div class="card-head"><h2 id="hEvents">Eventos</h2><div class="filters" id="filters" role="group" aria-label="Filtrar eventos"></div></div>
       <ol class="events" id="events"></ol>
     </section>
@@ -787,9 +794,9 @@ setInterval(tick,1000);
 /* =====================================================================
    6. INTERAÇÃO
    ===================================================================== */
-const PAGES = ["agora","slices","agentes","review","commits","eventos"];
+const PAGES = ["operacao","historico"];
 function go(p){
-  if(!PAGES.includes(p)) p = "agora";
+  if(!PAGES.includes(p)) p = PAGES[0];
   $("main").dataset.page = p;
   document.querySelectorAll("main > [data-page]").forEach((el)=>{ el.hidden = el.dataset.page!==p; });
   document.querySelectorAll("[data-go]").forEach((a)=>a.setAttribute("aria-current", a.dataset.go===p ? "page" : "false"));
