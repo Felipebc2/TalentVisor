@@ -245,7 +245,9 @@ def _dtext(decision: dict | None) -> str:
     return f"{DECISION_TEXT[decision['action']]} por recrutador em {_fmt_ts(decision['ts'])}" if decision else ""
 
 
-templates.env.globals.update(STAGES=STAGES, PROCESSING=PROCESSING, SKILL_LABELS=SKILL_LABELS, QUESTIONS=QUESTIONS)
+templates.env.globals.update(STAGES=STAGES, PROCESSING=PROCESSING, SKILL_LABELS=SKILL_LABELS, QUESTIONS=QUESTIONS,
+                             # cache-busting: browsers kept a stale style.css (no version in the URL)
+                             css_v=lambda: int((BASE / "static" / "style.css").stat().st_mtime))
 templates.env.filters["mmss"] = lambda t: f"{int(t) // 60:02d}:{int(t) % 60:02d}"
 templates.env.filters["reasons"] = lambda codes: [reason_label(c) for c in codes]
 
