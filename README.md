@@ -85,7 +85,7 @@ As demais variáveis já têm padrão e podem ficar como estão:
 
 | Variável | Padrão | O que faz |
 |---|---|---|
-| `LLM_MODE` | `real` | `mock` usa respostas de teste, sem rede e sem chave |
+| `LLM_MODE` | `mock` no `.env.example` | `mock` usa respostas de teste, sem rede e sem chave; troque para `real` depois de preencher as chaves |
 | `ALLOW_CLOUD_STT` | `0` | `1` libera transcrição pela Groq se a local falhar (envia o áudio; o termo passa a citar isso) |
 | `M3_MODEL` | `openai/gpt-oss-20b` | segmentação das respostas (Groq) |
 | `M4_MODEL` | `openai/gpt-oss-120b` | juiz principal (Groq) |
@@ -94,6 +94,7 @@ As demais variáveis já têm padrão e podem ficar como estão:
 | `PROMPT_GUARD_MODEL` | `meta-llama/llama-prompt-guard-2-86m` | detector de prompt injection (Groq) |
 | `JUDGE_RUNS` | `3` | quantas vezes o juiz avalia (a nota é a mediana) |
 | `TRANSCRIPT_TTL_DAYS` | `7` | dias até apagar a transcrição |
+| `DEMO_MODE` | `1` | na demo, dá leve preferência aos modelos da Groq (mais rápidos) |
 | `STT_MODEL` | `large-v3-turbo` | modelo de transcrição; é embutido na imagem, então mudar exige `make up` de novo |
 
 ## 4. Rodar
