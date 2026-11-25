@@ -61,6 +61,13 @@ def trace():
                 have = tests.get(last, set())
                 if name not in have:
                     errors.append(f"§11 cites missing test {last}::{name}")
+    nf07 = re.search(r"\| REQ-NF-07 \|([^|]*)\|", spec).group(1)
+    phony = (ROOT / "Makefile").read_text().split(".PHONY:")[1].split("\n")[0].split()
+    listed = re.findall(r"`(\w+)`", nf07.split("targets", 1)[1].split("only these")[0])
+    if set(phony) != set(listed):
+        errors.append(f"NF-07: Makefile .PHONY {sorted(phony)} differs from the SPEC list")
+    if ".env" not in (ROOT / ".gitignore").read_text().split():
+        errors.append("NF-03: .env is not in .gitignore")
     return errors
 
 

@@ -105,6 +105,14 @@ def test_guard_max_over_chunks(real):
     assert len(fake.calls) == 3
 
 
+def test_guard_bad_reply_raises(real):
+    # NaN or out of range would fail open through max(); text is not a score
+    for reply in ("nan", "NaN", "1.5", "-0.1", "inf", "probably safe", ""):
+        real(Fake(reply))
+        with pytest.raises(ValueError):
+            llm.guard("texto qualquer", KNOWN)
+
+
 def test_seed_not_sent_to_gemini(monkeypatch, tmp_path):
     """Gemini OpenAI-compat rejects `seed` with 400; Groq gets it."""
     from types import SimpleNamespace

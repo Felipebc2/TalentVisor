@@ -40,11 +40,12 @@ def _fmt(ts) -> str:
 
 def render_html(candidate, result: dict, decision: dict | None) -> str:
     action = decision["action"] if decision else None
+    decided = candidate.status in ("approved", "rejected")  # status, not the audit row, is the source of truth (UI-12)
     return _env.get_template("report.html").render(
         c=candidate, r=result, d=decision, labels=SKILL_LABELS,
         date=_fmt(candidate.created_at)[:10],
-        draft=action in (None, "second_review"),
-        show_name=action in ("approve", "reject") and bool(candidate.real_name),
+        draft=not decided,
+        show_name=decided and bool(candidate.real_name),
         decision_text=f"{ACTIONS[action]} em {_fmt(decision['ts'])}" if decision else "aguardando decisão humana",
         reasons=[reason_label(x) for x in result.get("reasons", [])])
 

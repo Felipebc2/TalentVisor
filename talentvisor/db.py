@@ -2,7 +2,9 @@
 
 REQ-L-01, REQ-L-05. Schema: docs/architecture/data-model.md
 """
+import json
 import os
+import shutil
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
@@ -10,8 +12,10 @@ from sqlalchemy import DateTime, TypeDecorator
 from sqlmodel import Field, Session, SQLModel, create_engine, delete, select, update
 
 DB_URL = os.environ.get("DB_URL", "sqlite:///data/talentvisor.db")
+UPLOAD_DIR = Path(os.environ.get("UPLOAD_DIR", "data/uploads"))
 ORPHAN_HOURS = 6  # uploads older than this never reached the pipeline cleanup
 TRANSCRIPT_TTL_DAYS = int(os.environ.get("TRANSCRIPT_TTL_DAYS", "7"))
+PROCESSING = ("received", "transcribing", "anonymizing", "scoring", "auditing")
 
 
 class UTCDateTime(TypeDecorator):
@@ -114,6 +118,21 @@ def init_db() -> None:
     SQLModel.metadata.create_all(engine)
 
 
+def fail_inflight() -> int:
+    """Startup only: web candidates still in a processing status lost their BackgroundTask; mark them `error`."""
+    with Session(engine) as s:
+        stuck = [c for c in s.exec(select(Candidate).where(Candidate.status.in_(PROCESSING)))
+                 if c.consent_version != "dataset"]  # dataset runs belong to the import script, not this process
+        for c in stuck:
+            if c.video_path:
+                Path(c.video_path).unlink(missing_ok=True)
+            c.status, c.error, c.video_path = "error", c.status, None
+            s.add(c)
+            s.add(AuditLog(candidate_id=c.id, actor="system", action="error", payload_json=json.dumps({"stage": c.error})))
+        s.commit()
+    return len(stuck)
+
+
 def purge_expired(now: datetime | None = None) -> dict[str, int]:
     """Delete rows past their TTL and orphan uploads; returns counts per table (+ orphan_videos)."""
     now = now or now_utc()
@@ -138,9 +157,16 @@ def purge_expired(now: datetime | None = None) -> dict[str, int]:
                 c.status, c.error = "error", "transcribing"
             s.add(c)
         s.flush()
+        # Groq chunk dirs (stt.transcribe) left behind when the process died mid-fallback
+        cutoff = now - timedelta(hours=ORPHAN_HOURS)
+        for tmp in UPLOAD_DIR.glob("tmp*"):
+            if tmp.is_dir() and datetime.fromtimestamp(tmp.stat().st_mtime, UTC) < cutoff:
+                shutil.rmtree(tmp, ignore_errors=True)
         # REQ-L-01: free text (contest, decision comment) must not outlive its candidate
         gone = select(Candidate.id).where(Candidate.created_at < d(30))
-        s.exec(update(AuditLog).where(AuditLog.candidate_id.in_(gone)).values(payload_json="{}"))
+        # import markers keep only the pseudonymous dataset_id (not PII) so a purged row is never re-imported
+        free_text = AuditLog.action.not_in(["imported", "refused"])
+        s.exec(update(AuditLog).where(AuditLog.candidate_id.in_(gone), free_text).values(payload_json="{}"))
         counts = {m.__tablename__: s.exec(delete(m).where(w)).rowcount for m, w in rules}
         counts["orphan_videos"] = len(orphans)
         s.commit()

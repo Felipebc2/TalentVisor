@@ -14,7 +14,7 @@
   <dt>Seus direitos</dt>
   <dd>Toda decisão é tomada por uma pessoa. Você pode pedir revisão humana e contestar o resultado pelo código da sua candidatura, em <a href="/contest">/contest</a>.</dd>
   <dt>Quem processa</dt>
-  <dd>A transcrição roda localmente. Modelos de IA na nuvem (Groq, Google e Mistral, fora do Brasil) recebem só o texto sem seus dados pessoais.{% if cloud_stt %} <strong>Se a transcrição local falhar, o áudio do vídeo é enviado à Groq (EUA) para transcrição.</strong>{% endif %}</dd>
+  <dd>A transcrição roda localmente. Modelos de IA na nuvem (Groq, Google e Mistral, fora do Brasil) recebem só o texto, anonimizado automaticamente antes do envio (melhor esforço: algum dado pessoal pode escapar), e planos gratuitos podem usar esses textos para melhorar os modelos.{% if cloud_stt %} <strong>Se a transcrição local falhar, o áudio do vídeo é enviado à Groq (EUA) para transcrição.</strong>{% endif %}</dd>
 </dl>
 <form action="/upload" method="get">
   <label><input type="checkbox" name="consent" value="{{ version }}" required> Li e aceito o termo (versão {{ version }})</label>

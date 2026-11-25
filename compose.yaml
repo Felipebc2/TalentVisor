@@ -12,6 +12,8 @@ services:
       - ./docs:/app/docs:ro
       - ./pyproject.toml:/app/pyproject.toml:ro
       - ./CLAUDE.md:/app/CLAUDE.md:ro
+      - ./Makefile:/app/Makefile:ro  # read by scripts/docs_links.py (NF-07 target check)
+      - ./.gitignore:/app/.gitignore:ro  # read by scripts/docs_links.py (NF-03: .env ignored)
       - tv-data:/app/data
     command: uvicorn talentvisor.app:app --host 0.0.0.0 --port 8000 --reload
 

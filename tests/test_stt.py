@@ -97,7 +97,7 @@ def test_cloud_fallback_offsets_and_prompt(tmp_path, monkeypatch):
     monkeypatch.setattr(stt, "_groq", lambda: fake)
     real = stt._chunks
     monkeypatch.setattr(stt, "_chunks", lambda *a: seen.extend(real(*a)) or seen)
-    r = stt.transcribe(f, chunk_seconds=10)
+    r = stt.transcribe(f, chunk_seconds=10, allow_cloud=True)
     assert [s["start"] for s in r["segments"]] == [0.0, 10.0, 20.0]
     assert [s["end"] for s in r["segments"]] == [1.0, 11.0, 21.0]
     assert r["model"] == "groq/whisper-large-v3"
@@ -117,8 +117,30 @@ def test_no_fallback_when_flag_off(tmp_path, monkeypatch):
     monkeypatch.setattr(stt, "_model", _boom)
     monkeypatch.setattr(stt, "_groq", lambda: pytest.fail("cloud must not be called"))
     with pytest.raises(RuntimeError, match="local failed"):
-        stt.transcribe(f)
+        stt.transcribe(f, allow_cloud=True)
     assert not f.exists()
+
+
+def test_cloud_needs_groq_consent(tmp_path, monkeypatch):
+    f = tmp_path / "v.mp4"
+    f.write_bytes(b"x")
+    monkeypatch.setenv("ALLOW_CLOUD_STT", "1")
+    monkeypatch.setattr(stt, "_model", _boom)
+    monkeypatch.setattr(stt, "_groq", lambda: pytest.fail("cloud needs consent v1-groq"))
+    with pytest.raises(RuntimeError, match="local failed"):
+        stt.transcribe(f)  # allow_cloud defaults to False
+    assert not f.exists()
+
+
+def test_groq_missing_fields_worst_case(tmp_path, monkeypatch):
+    f = tmp_path / "v.wav"
+    _sine(f, secs=5)
+    fake = S(audio=S(transcriptions=S(create=lambda **kw: S(segments=[S(start=0.0, end=1.0, text=" oi ")]))))
+    monkeypatch.setenv("ALLOW_CLOUD_STT", "1")
+    monkeypatch.setattr(stt, "_model", _boom)
+    monkeypatch.setattr(stt, "_groq", lambda: fake)
+    q = stt.transcribe(f, chunk_seconds=10, allow_cloud=True)["quality"]
+    assert q["no_speech_prob"] == 1.0 and q["avg_logprob"] == -10.0
 
 
 def test_zero_segments_is_not_perfect_audio(tmp_path, monkeypatch):
@@ -131,4 +153,4 @@ def test_zero_segments_is_not_perfect_audio(tmp_path, monkeypatch):
 
     monkeypatch.setattr(stt, "_model", lambda: Empty())
     q = stt.transcribe(f)["quality"]
-    assert q["no_speech_prob"] == 1.0 and q["pct_inaudible"] == 1.0 and q["avg_logprob"] == 0.0
+    assert q["no_speech_prob"] == 1.0 and q["pct_inaudible"] == 1.0 and q["avg_logprob"] == -10.0

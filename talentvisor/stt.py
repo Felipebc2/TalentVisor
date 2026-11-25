@@ -62,13 +62,13 @@ def _groq_segments(chunks, seconds) -> list:
 
 def _result(segs, model) -> dict:
     n = len(segs) or 1
-    # No segments = no speech: report it as fully inaudible, not as perfect audio (avg_logprob stays 0.0).
+    # No segments = no speech: worst case on every metric, never perfect audio (D-034).
     empty = not segs
     return {
         "segments": [{"start": s.start, "end": s.end, "text": s.text.strip()} for s in segs],
         "text": " ".join(s.text.strip() for s in segs),
         "quality": {
-            "avg_logprob": sum(s.avg_logprob for s in segs) / n,
+            "avg_logprob": -10.0 if empty else sum(s.avg_logprob for s in segs) / n,
             "no_speech_prob": 1.0 if empty else sum(s.no_speech_prob for s in segs) / n,
             # pct_inaudible = share of segments with no_speech_prob > 0.5
             "pct_inaudible": 1.0 if empty else sum(s.no_speech_prob > 0.5 for s in segs) / n,
@@ -77,8 +77,9 @@ def _result(segs, model) -> dict:
     }
 
 
-def transcribe(path, chunk_seconds=600) -> dict:
-    """Transcribe `path` locally (Groq fallback only if ALLOW_CLOUD_STT=1); media is ALWAYS deleted (REQ-L-01)."""
+def transcribe(path, chunk_seconds=600, allow_cloud=False) -> dict:
+    """Transcribe `path` locally; Groq fallback only if ALLOW_CLOUD_STT=1 AND the candidate consented to it
+    (`allow_cloud`, consent v1-groq, L-04). Media is ALWAYS deleted (REQ-L-01)."""
     path = Path(path)
     try:
         try:
@@ -87,7 +88,7 @@ def transcribe(path, chunk_seconds=600) -> dict:
             )
             return _result(list(gen), f"faster-whisper/{MODEL}")  # consume before the file goes away
         except Exception:
-            if os.environ.get("ALLOW_CLOUD_STT") != "1":
+            if not (allow_cloud and os.environ.get("ALLOW_CLOUD_STT") == "1"):
                 raise
         with tempfile.TemporaryDirectory(dir=path.parent) as tmp:  # chunks stay next to the upload, never orphaned in /tmp
             segs = _groq_segments(_chunks(path, tmp, chunk_seconds), chunk_seconds)

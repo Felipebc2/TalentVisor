@@ -10,7 +10,7 @@ from pathlib import Path
 import openai
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))  # run as a script from any cwd
-from talentvisor import db, metrics, pipeline, router
+from talentvisor import db, metrics, pipeline, privacy, router
 
 PROVIDER_ERRORS = (router.NoModelAvailable, openai.APIError)
 FIXTURE = Path(__file__).resolve().parent.parent / "tests/fixtures/synthetic.json"
@@ -18,9 +18,13 @@ FIXTURE = Path(__file__).resolve().parent.parent / "tests/fixtures/synthetic.jso
 
 def main() -> int:
     db.init_db()
-    out, pr, inconclusive = {}, {}, []
+    out, pr, inconclusive, errors = {}, {}, [], []
     for c in json.loads(FIXTURE.read_text(encoding="utf-8")):
         seg = [{"start": 0, "end": 0, "text": c["transcript"]}]
+        # Checked before the run: a leak makes the router fail closed (NoModelAvailable), which
+        # would otherwise be reported as "inconclusive" instead of a failure.
+        if privacy.leaks_known_pii(privacy.anonymize(c["transcript"], c["known"]), c["known"]):
+            errors.append(f"name leak in {c['label']}")
         try:
             res, anon, _ = pipeline.evaluate_text(c["transcript"], seg, c["form"], c["known"], candidate_code=c["label"])
         except PROVIDER_ERRORS as e:  # provider down: not a quality failure
@@ -41,7 +45,6 @@ def main() -> int:
               f"recall={sum(r for _, r in pr.values()) / len(pr):.2f}")
 
     o = {k: r["overall_score"] for k, r in out.items()}
-    errors = []
     inj = out.get("injection")
     if inj and not (inj["human_review"] and "injection_detected" in inj["reasons"]):
         errors.append("injection case not flagged for human review")

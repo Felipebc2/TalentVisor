@@ -15,6 +15,7 @@ RESULT = {**MOCK_JUDGE, "overall_score": 4.2, "human_review": True,
 RESULT["soft_skills"] = [{**s, "confidence": 0.76} for s in MOCK_JUDGE["soft_skills"]]
 RESULT["soft_skills"][1] = {**RESULT["soft_skills"][1], "score": None}
 APPROVE = {"action": "approve", "comment": "ok", "ts": datetime(2026, 11, 25, 9, 30, tzinfo=timezone.utc)}
+APPROVED = SimpleNamespace(**{**vars(CAND), "status": "approved"})
 
 
 def test_pdf_generated():
@@ -24,9 +25,21 @@ def test_pdf_generated():
 def test_pdf_draft_watermark():
     assert "RASCUNHO" in render_html(CAND, RESULT, None)
     assert "RASCUNHO" in render_html(CAND, RESULT, {**APPROVE, "action": "second_review"})
-    html = render_html(CAND, RESULT, APPROVE)
+    html = render_html(APPROVED, RESULT, APPROVE)
     assert "RASCUNHO" not in html and "Maria Souza" in html
     assert "aprovado para entrevista por recrutador em 25/11/2026 09:30" in html
+
+
+def test_name_follows_candidate_status():
+    # an approve row with the candidate reopened (second_review) or never decided: no name, draft
+    for status in ("second_review", "awaiting_decision"):
+        html = render_html(SimpleNamespace(**{**vars(CAND), "status": status}), RESULT, APPROVE)
+        assert "Maria Souza" not in html and "RASCUNHO" in html
+    for status in ("approved", "rejected"):
+        html = render_html(SimpleNamespace(**{**vars(CAND), "status": status}), RESULT, APPROVE)
+        assert "Maria Souza" in html and "RASCUNHO" not in html
+    html = render_html(SimpleNamespace(**{**vars(CAND), "status": "approved", "real_name": None}), RESULT, APPROVE)
+    assert "Candidato:" not in html
 
 
 def test_no_name_before_decision():
@@ -35,7 +48,7 @@ def test_no_name_before_decision():
 
 
 def test_pages_le_2():
-    html = render_html(CAND, RESULT, APPROVE)
+    html = render_html(APPROVED, RESULT, APPROVE)
     assert len(HTML(string=html).render().pages) <= 2
     assert "sem evidência suficiente" in html and "divergência em Ética" in html
 

@@ -59,16 +59,18 @@ def anonymization_pr(original: str, anonymized: str, pii: list[str]) -> tuple[fl
 
 
 def summary(session: Session) -> dict:
-    evals = session.exec(select(Evaluation).order_by(Evaluation.id)).all()
+    # latest evaluation per candidate: a re-run must not count the candidate twice
+    evals = list({e.candidate_id: e for e in session.exec(select(Evaluation).order_by(Evaluation.id))}.values())
     n = len(evals)
     ms = defaultdict(list)
-    for r in session.exec(select(RouterLog).where(RouterLog.ok)):
+    # candidate runs only: eval/bias scripts and the text API log with candidate_id NULL
+    for r in session.exec(select(RouterLog).where(RouterLog.ok, RouterLog.candidate_id != None)):  # noqa: E711
         ms[r.stage].append(r.ms)
     # latest recruiter decision per candidate (approve/reject only); later rows overwrite earlier ones
     human = {a.candidate_id: a.action for a in session.exec(select(AuditLog).where(
         AuditLog.actor == "recruiter", AuditLog.action.in_(["approve", "reject"])).order_by(AuditLog.id))}
-    ai = {e.candidate_id: "approve" if (e.overall_score or 0) >= AI_APPROVE_CUT else "reject"
-          for e in evals if e.overall_score is not None}  # latest evaluation wins
+    ai = {e.candidate_id: "approve" if e.overall_score >= AI_APPROVE_CUT else "reject"
+          for e in evals if e.overall_score is not None}
     ids = [c for c in human if c in ai]
     return {
         "total": n,

@@ -27,6 +27,7 @@ def test_eval_mock_flags_injection(tmp_path, monkeypatch, capsys):
     out = capsys.readouterr().out
     assert "ordering checks skipped" in out and "injection_detected" in out
     assert "anon mean precision=" in out and "recall=" in out
+    assert "name leak" not in out  # phase 1 leak check ran clean on every case
 
 
 def test_eval_provider_error_inconclusive(tmp_path, monkeypatch, capsys):

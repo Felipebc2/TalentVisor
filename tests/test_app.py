@@ -14,9 +14,12 @@ def client(tmp_path, monkeypatch):
 
     monkeypatch.setattr(db, "engine", create_engine(f"sqlite:///{tmp_path}/t.db"))
     monkeypatch.setattr(a, "UPLOAD_DIR", tmp_path / "up")
-    monkeypatch.setattr("talentvisor.pipeline.run", lambda cid: None)  # pipeline has its own tests
+    calls = []
+    monkeypatch.setattr("talentvisor.pipeline.run", calls.append)  # pipeline has its own tests; record the cids
     db.init_db()
-    return TestClient(a.app, follow_redirects=False)
+    c = TestClient(a.app, follow_redirects=False)
+    c.calls = calls
+    return c
 
 
 def post(client, filename="minha_entrevista.mp4", ctype="video/mp4", **over):
@@ -37,7 +40,12 @@ def test_upload_requires_consent(client):
 
 
 def test_upload_without_consent_400(client):
+    from talentvisor import db
+
     assert post(client, consent="").status_code == 400
+    with Session(db.engine) as s:
+        assert s.exec(select(db.Candidate)).all() == []
+    assert client.calls == []
 
 
 def test_invalid_extension(client):
@@ -63,6 +71,7 @@ def test_upload_ok(client):
     with Session(db.engine) as s:
         c = s.exec(select(db.Candidate)).one()
         assert c.status == "received" and c.consent_version == "v1" and c.code in r.headers["location"]
+        assert c.consent_at is not None and client.calls == [c.id]
         path = c.video_path
         assert "video_path" not in json.loads(c.form_json)
         assert s.exec(select(db.AuditLog)).one().action == "submitted"
@@ -357,9 +366,27 @@ def test_upload_required_fields_and_csv_prefill(client):
     r = post(client, institution="")
     assert r.status_code == 400 and "Campo obrigatório." in r.text
     csv = "nome_pseudonimo;formacao_direito;experiencia_resumida\nAna Lima;Direito;Estágio\n".encode()
-    r = client.post("/upload", data={**FORM, "name": "", "education": ""},
+    r = client.post("/upload", data={**FORM, "name": "", "education": "Direito UnB"},
                     files={"video": ("v.mp4", b"fake", "video/mp4"), "csv": ("c.csv", csv, "text/csv")})
-    assert r.status_code == 303  # CSV pre-filled the empty name and education
+    assert r.status_code == 303  # CSV pre-filled the empty name
+    from talentvisor import db
+
+    with Session(db.engine) as s:
+        c = s.exec(select(db.Candidate)).one()
+    assert c.real_name == "Ana Lima" and json.loads(c.form_json)["education"] == "Direito UnB"  # user value wins
+    assert json.loads(c.form_json)["experience"] == "Estágio"
+
+
+def test_decision_409_while_processing(client):
+    from talentvisor import db
+
+    for i, st in enumerate((*db.PROCESSING, "error", "refused")):
+        cid = seed(st, code=f"TV-P{i:03d}")
+        for action in ("approve", "reject", "second_review"):
+            r = client.post(f"/candidate/{cid}/decision", data={"decision": action, "comment": "x"})
+            assert r.status_code == 409, (st, action)
+    with Session(db.engine) as s:
+        assert not s.exec(select(db.AuditLog).where(db.AuditLog.actor == "recruiter")).all()
 
 
 def test_decision_requires_choice(client):

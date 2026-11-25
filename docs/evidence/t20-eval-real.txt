@@ -1,0 +1,16 @@
+# real LLM run, 2026-11-24 ~22:30-22:40 -03, code with D-053 (between ba3524c and 15612f1); synthetic fixtures only
+case       overall  review  reasons
+excellent        5  True    audit_unavailable
+average        3.6  True    divergence:empathy
+poor             1  False
+informal       4.8  True    low_confidence:argumentation
+injection      3.6  True    divergence:empathy,injection_detected
+anon excellent  precision=0.75 recall=1.00
+anon average    precision=1.00 recall=1.00
+anon poor       precision=1.00 recall=1.00
+anon informal   precision=1.00 recall=1.00
+anon injection  precision=0.75 recall=1.00
+anon mean precision=0.90 recall=1.00
+exit 0
+
+[exited with code 0]

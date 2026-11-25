@@ -168,3 +168,15 @@ def test_5xx_cools_down_and_falls_back(monkeypatch):
     calls = fake(monkeypatch, {"openai/gpt-oss-120b": api_err(openai.InternalServerError, 503)})
     router.call("E4", {"tokens": 3000}, [], Out, {})
     assert calls == ["openai/gpt-oss-120b", "gemini-4-hydrogen"] and "openai/gpt-oss-120b" in router._cooldown
+
+
+def test_e4_cascade_order():
+    """Full E4 order: relevance (M4 9, M5 8, M5F 7, M6 7, M3 6) + bonuses; ties by relevance, then slot order."""
+    def order(tokens):
+        return [c.model for c in router.route("E4", {"tokens": tokens})]
+
+    m3, m4, m5, m5f, m6 = ("openai/gpt-oss-20b", "openai/gpt-oss-120b", "gemini-4-hydrogen",
+                           router.M5_FALLBACK, "mistral:ministral-14b-2512")
+    assert order(3000) == [m4, m5, m5f, m6, m3]
+    assert order(1000) == [m4, m5, m3, m5f, m6]  # M3 +2 short = 8 ties M5, which wins on relevance
+    assert order(9000) == [m5, m4, m5f, m6, m3]  # M5 +2 long = 10; M5F (slot M5) +2 = 9 ties M4, M4 wins on relevance

@@ -234,7 +234,7 @@ Inline JS outside HTMX (no other script exists):
 | UI-14 | Given `awaiting_decision`/`second_review`, then the button says "Baixar PDF (rascunho)" and the PDF has "RASCUNHO" and no real name | `test_app.py::test_detail_renders_skills`, `test_report.py::test_pdf_draft_watermark`, `::test_no_name_before_decision` |
 | UI-15 | Given 5 skills, then the PDF has ≤ 2 pages and the footer lists the model versions | `test_report.py::test_pages_le_2`, `::test_footer_lists_model_versions` |
 | UI-16 | Given an unknown HTML route, then 404 page "Página não encontrada."; under `/api/*`, then JSON `{"detail": "Not Found"}` | `test_app.py::test_not_found_html_and_api_json` |
-| F-17 | Given an empty field, then 400; an unknown code → same 303, nothing written; a contest → "contestado" badge and escaped list | `test_app.py::test_contest_requires_fields`, `::test_contest_unknown_code_same_message`, `::test_contest_registers_audit`, `::test_dashboard_shows_contested_badge`, `::test_detail_lists_contests_escaped` |
+| Contest ([SPEC §5.1](spec.md), REQ-F-17) | Given an empty field, then 400; an unknown code → same 303, nothing written; a contest → "contestado" badge and escaped list | `test_app.py::test_contest_requires_fields`, `::test_contest_unknown_code_same_message`, `::test_contest_registers_audit`, `::test_dashboard_shows_contested_badge`, `::test_detail_lists_contests_escaped` |
 | UI-P5 | Given a 360 px viewport, then no horizontal page scroll | manual (browser devtools; layout cannot be measured in TestClient) |
 
 Tasks: [T-04](../plan/slices.md) (3.1–3.3, 3.8, minimal 3.5), [T-14](../plan/slices.md) (3.5, 3.6), [T-15](../plan/slices.md) (3.7), [T-16](../plan/slices.md) (3.4).

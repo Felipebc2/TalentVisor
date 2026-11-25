@@ -69,6 +69,45 @@ def test_purge_orphan_videos(db, tmp_path):
         assert (f.video_path, f.status) == (str(new), "received")
 
 
+def test_purge_orphan_tmp_chunks(db, tmp_path, monkeypatch):
+    import os
+
+    up = tmp_path / "up"
+    monkeypatch.setattr(db, "UPLOAD_DIR", up)
+    old, new = up / "tmpold", up / "tmpnew"
+    for d, hours in ((old, 7), (new, 1)):
+        d.mkdir(parents=True)
+        (d / "c000.mp3").write_bytes(b"x")
+        ts = (NOW - timedelta(hours=hours)).timestamp()
+        os.utime(d, (ts, ts))
+    keep = up / "video.mp4"
+    keep.write_bytes(b"x")
+    db.purge_expired(now=NOW)
+    assert not old.exists() and new.exists() and keep.exists()
+
+
+def test_startup_fails_inflight(db, tmp_path):
+    video = tmp_path / "v.mp4"
+    video.write_bytes(b"x")
+    with Session(db.engine) as s:
+        s.add_all([
+            db.Candidate(code="TV-WEB1", status="scoring", consent_version="v1", video_path=str(video)),
+            db.Candidate(code="TV-WEB2", status="received", consent_version="v1-groq", created_at=ago(2)),
+            db.Candidate(code="TV-DATA", status="scoring", consent_version="dataset"),
+            db.Candidate(code="TV-DONE", status="awaiting_decision", consent_version="v1"),
+        ])
+        s.commit()
+    assert db.fail_inflight() == 2
+    assert not video.exists()
+    with Session(db.engine) as s:
+        got = {c.code: (c.status, c.error, c.video_path) for c in s.exec(select(db.Candidate))}
+        audits = sorted(a.payload_json for a in s.exec(select(db.AuditLog))
+                        if a.actor == "system" and a.action == "error")
+    assert got == {"TV-WEB1": ("error", "scoring", None), "TV-WEB2": ("error", "received", None),
+                   "TV-DATA": ("scoring", None, None), "TV-DONE": ("awaiting_decision", None, None)}
+    assert audits == ['{"stage": "received"}', '{"stage": "scoring"}']
+
+
 def test_purge_redacts_audit_text_of_purged_candidate(db):
     with Session(db.engine) as s:
         old = db.Candidate(code="TV-OLD1", created_at=ago(31))
@@ -81,3 +120,16 @@ def test_purge_redacts_audit_text_of_purged_candidate(db):
     db.purge_expired(now=NOW)
     with Session(db.engine) as s:
         assert sorted(a.payload_json for a in s.exec(select(db.AuditLog))) == ['{"text": "fica"}', "{}"]
+
+
+def test_purge_keeps_import_marker(db):
+    """The import marker holds only the pseudonymous dataset_id, so a purged dataset row is not re-imported."""
+    with Session(db.engine) as s:
+        old = db.Candidate(code="TV-OLD2", created_at=ago(31))
+        s.add(old)
+        s.commit()
+        s.add(db.AuditLog(candidate_id=old.id, actor="system", action="imported", payload_json='{"dataset_id": "C001"}', ts=ago(31)))
+        s.commit()
+    db.purge_expired(now=NOW)
+    with Session(db.engine) as s:
+        assert [a.payload_json for a in s.exec(select(db.AuditLog))] == ['{"dataset_id": "C001"}']

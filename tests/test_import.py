@@ -54,6 +54,8 @@ def test_c002_refused(env):
     assert sorted(c.real_name for c in ok) == ["Fulana X001", "Fulana X003"]
     ref = next(c for c in cands if c.status == "refused")
     assert (ref.cleared, ref.real_name, ref.pii_json, ref.form_json, ref.video_path) == (False, None, "{}", "{}", None)
+    assert (ref.consent_at, ref.consent_version) == (None, None)  # no consent recorded for a refused row
+    assert all(c.consent_at is not None for c in ok)
     assert [(a.action, a.candidate_id) for a in audits if "X002" in a.payload_json] == [("refused", ref.id)]
     assert len(calls) == 2 and ref.id not in calls
     files = list((tmp / "up").glob("*.mp4"))
@@ -102,3 +104,33 @@ def test_error_row_is_retried(env):
     assert len(calls) == 3  # only the errored row runs again; refused and evaluated rows are skipped
     with Session(db.engine) as s:
         assert len(s.exec(select(db.Candidate)).all()) == 4
+
+
+def test_partial_video_deleted_on_copy_error(env, monkeypatch, capsys):
+    db, mod, calls, z, tmp = env
+
+    def broken(self, name, dest):
+        dest.write_bytes(b"partial")
+        if "X001" in name:
+            raise OSError("disk full")
+
+    monkeypatch.setattr(mod.Source, "copy_video", broken)
+    mod.main(str(z))
+    assert "X001: skipped: OSError" in capsys.readouterr().out
+    with Session(db.engine) as s:
+        cands = s.exec(select(db.Candidate)).all()
+    assert sorted(c.real_name or "" for c in cands) == ["", "Fulana X003"]  # X001 skipped, import went on
+    assert [p.name for p in (tmp / "up").iterdir()] == [Path(c.video_path).name for c in cands if c.video_path]
+    assert len(calls) == 1
+
+
+def test_purged_row_is_skipped(env):
+    db, mod, calls, z, _ = env
+    mod.main(str(z))
+    with Session(db.engine) as s:
+        s.delete(s.get(db.Candidate, calls[0]))  # candidate purged, its `imported` marker stays
+        s.commit()
+    mod.main(str(z))
+    assert len(calls) == 2  # not re-imported
+    with Session(db.engine) as s:
+        assert len(s.exec(select(db.Candidate)).all()) == 2

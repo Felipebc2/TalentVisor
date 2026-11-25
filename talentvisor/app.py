@@ -22,7 +22,7 @@ from sqlmodel import Session, select
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from talentvisor import db, metrics, pipeline, report, stt
-from talentvisor.db import AuditLog, Candidate, Evaluation, RouterLog, now_utc
+from talentvisor.db import PROCESSING, AuditLog, Candidate, Evaluation, RouterLog, now_utc
 from talentvisor.prompts import QUESTIONS, SKILL_LABELS
 from talentvisor.report import reason_label
 
@@ -32,7 +32,7 @@ templates = Jinja2Templates(directory=BASE / "templates")  # autoescape on for .
 CLOUD_STT = os.environ.get("ALLOW_CLOUD_STT") == "1"  # read at start: the consent must name Groq (L-04, D-035)
 CONSENT_VERSION = "v1-groq" if CLOUD_STT else "v1"
 MAX_BYTES = 300 * 1024 * 1024
-UPLOAD_DIR = Path(os.environ.get("UPLOAD_DIR", "data/uploads"))
+UPLOAD_DIR = db.UPLOAD_DIR
 VIDEO_TYPES = {".mp4": "video/mp4", ".webm": "video/webm", ".mov": "video/quicktime"}
 FLASH = {"consent": "Aceite o termo para continuar.", "contested": "Contestação registrada. Uma pessoa vai revisar."}  # fixed texts: never echo user input
 CSV_MAP = {"nome_pseudonimo": "name", "formacao_direito": "education", "experiencia_resumida": "experience"}
@@ -42,6 +42,7 @@ TEXT_FIELDS = ("name", "institution", "city", "education", "experience", "descri
 @asynccontextmanager
 async def lifespan(_: FastAPI):
     db.init_db()
+    db.fail_inflight()  # BackgroundTasks die with the process: nothing is really in flight at startup
     db.purge_expired()
     yield
 
@@ -162,7 +163,7 @@ async def upload(request: Request, background_tasks: BackgroundTasks):
     if video is None or not getattr(video, "filename", ""):
         errors["video"] = "Envie o vídeo."
     else:
-        path, err = _save_video(video)
+        path, err = await run_in_threadpool(_save_video, video)
         if err:
             errors["video"] = err
     if errors:
@@ -230,7 +231,6 @@ async def contest(request: Request):
     return RedirectResponse("/contest?msg=contested", status_code=303)
 
 
-PROCESSING = ("received", "transcribing", "anonymizing", "scoring", "auditing")
 DECIDABLE = ("awaiting_decision", "second_review")
 FINAL = ("approved", "rejected")  # only "second_review" can reopen these
 DECISION_STATUS = {"approve": "approved", "reject": "rejected", "second_review": "second_review"}

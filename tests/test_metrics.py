@@ -53,15 +53,31 @@ def test_summary(session):
     assert metrics.summary(session)["review_rate"] is None
     seed(session, 1, 4.0, review=True, reasons="injection_detected", decision="approve")
     seed(session, 2, 2.0, decision="reject")
-    session.add_all([RouterLog(stage="eval", model="m", ms=ms) for ms in (100, 300, 200)]
-                    + [RouterLog(stage="eval", model="m", ms=9999, ok=False)])
+    session.add_all([RouterLog(candidate_id=1, stage="E4", model="m", ms=ms) for ms in (100, 300, 200)]
+                    + [RouterLog(candidate_id=1, stage="E4", model="m", ms=9999, ok=False)])
     session.commit()
     m = metrics.summary(session)
     assert (m["total"], m["review_rate"], m["injection_rate"]) == (2, 0.5, 0.5)
-    assert m["latency_p50"] == {"eval": 200} and m["kappa"] is None  # 2 decisions < 3
+    assert m["latency_p50"] == {"E4": 200} and m["kappa"] is None  # 2 decisions < 3
     seed(session, 3, 4.5, decision="approve")
     seed(session, 4, 1.0, decision="approve")  # disagreement
     assert metrics.summary(session)["kappa"] == pytest.approx(0.5)  # po=3/4, pe=0.5
+
+
+def test_summary_denominators(session):
+    seed(session, 1, 4.0, review=True, reasons="injection_detected")
+    seed(session, 2, 3.0)
+    # candidate 1 re-evaluated: only its latest evaluation counts (clean, no review)
+    session.add(Evaluation(candidate_id=1, overall_score=4.0, human_review=False, reasons=""))
+    # eval/bias/api runs (candidate_id NULL) stay out of the latency p50
+    session.add_all([RouterLog(candidate_id=1, stage="E4", model="m", ms=100),
+                     RouterLog(candidate_id=2, stage="E4", model="m", ms=300),
+                     RouterLog(candidate_id=None, stage="E4", model="m", ms=9000),
+                     RouterLog(candidate_id=None, stage="E3", model="m", ms=9000)])
+    session.commit()
+    m = metrics.summary(session)
+    assert (m["total"], m["review_rate"], m["injection_rate"]) == (2, 0.0, 0.0)
+    assert m["latency_p50"] == {"E4": 200}
 
 
 def test_dashboard_renders_metrics(session):

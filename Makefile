@@ -15,13 +15,13 @@ status: ## show container status
 	docker compose ps
 
 health: ## GET /health from inside the container
-	@docker compose exec -T app python -c "import urllib.request,json;print(json.dumps(json.load(urllib.request.urlopen('http://localhost:8000/health')),indent=2))"
+	@docker compose exec -T app python -c "import http.client,json;c=http.client.HTTPConnection('localhost',8000);c.request('GET','/health');r=c.getresponse();print('HTTP',r.status);print(json.dumps(json.load(r),indent=2))"
 
 logs: ## follow the app logs
 	docker compose logs -f app
 
-test: ## pytest + ruff + docs links in the container (T=tests/x.py runs one file)
-	docker compose run --rm -T -e LLM_MODE=mock app sh -c "pytest $(T) && ruff check . && python scripts/docs_links.py --check"
+test: ## pytest + ruff + docs/SPEC checks in the container, no keys (T=tests/x.py runs one file)
+	docker compose run --rm -T -e LLM_MODE=mock -e GROQ_API_KEY= -e GEMINI_API_KEY= -e MISTRAL_API_KEY= -e ALLOW_CLOUD_STT=0 app sh -c "pytest $(T) && ruff check . && python scripts/docs_links.py --check"
 
 import: ## import the dataset: make import ZIP=../Dataset_Advogados_Jr_Completo.zip
 	@test -n "$(ZIP)" || { echo "usage: make import ZIP=<path to dataset zip>"; exit 1; }
@@ -30,7 +30,7 @@ import: ## import the dataset: make import ZIP=../Dataset_Advogados_Jr_Completo.
 ops: ## live ops dashboard of the agent loop on http://localhost:8001 (1 s refresh)
 	@mkdir -p ops
 	@docker rm -f tv-ops >/dev/null 2>&1 || true
-	@docker run -d --name tv-ops -p 8001:8001 \
+	@docker run -d --name tv-ops -p 127.0.0.1:8001:8001 \
 		-v "$(CURDIR)/scripts:/w/scripts:ro" -v "$(CURDIR)/ops:/w/ops:ro" -v "$(CURDIR)/docs/plan:/w/docs/plan:ro" \
 		python:3.14-slim python /w/scripts/ops.py serve >/dev/null
 	@echo "live ops: http://localhost:8001  (stop: docker rm -f tv-ops)"

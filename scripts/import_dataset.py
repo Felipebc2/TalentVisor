@@ -86,9 +86,9 @@ def _import_row(src: Source, row: dict, answers: dict, did: str) -> int | None:
             print(f"{did}: skipped: already imported")
             return None
         if (row["liberado_analise"] or "").strip() != "Sim":
-            # refused: placeholder row with no PII and no video, never processed
-            cand = db.Candidate(code=_new_code(s), status="refused", cleared=False, consent_version="dataset",
-                                consent_at=db.now_utc(), real_name=None, pii_json="{}", form_json="{}")
+            # refused: placeholder row with no PII, no video and no consent, never processed
+            cand = db.Candidate(code=_new_code(s), status="refused", cleared=False, consent_version=None,
+                                consent_at=None, real_name=None, pii_json="{}", form_json="{}")
             s.add(cand)
             s.flush()
             _audit(s, "refused", did, cand.id)
@@ -96,11 +96,11 @@ def _import_row(src: Source, row: dict, answers: dict, did: str) -> int | None:
             print(f"{did}: refused: no authorization")
             return None
         video = UPLOAD_DIR / f"{uuid.uuid4()}.mp4"
-        src.copy_video(row["arquivo_video"], video)
         name = row["nome_pseudonimo"]
         form = {"education": row["formacao_direito"], "experience": row["experiencia_resumida"],
                 "description": "", "answers": answers.get(did, {})}
         try:
+            src.copy_video(row["arquivo_video"], video)  # a mid-copy failure leaves a partial file: deleted below
             cand = db.Candidate(
                 code=_new_code(s), status="received", cleared=True, consent_version="dataset", consent_at=db.now_utc(),
                 real_name=name, pii_json=json.dumps({"name": name}), form_json=json.dumps(form),

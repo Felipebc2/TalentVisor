@@ -7,6 +7,8 @@ import re
 import unicodedata
 from functools import lru_cache
 
+from talentvisor.prompts import _BRACKET_RUN
+
 _CONNECTORS = {"dos", "das"}  # name parts of 3 letters that are not names
 _PLACEHOLDER = re.compile(r"\[(?:NOME|INSTITUICAO|LOCAL|CPF|OAB|EMAIL|TELEFONE|RG)\]")
 
@@ -104,7 +106,7 @@ _INJECTION = {
     ),
     "system_prompt": r"\b(?:system\s+prompt|prompt\s+(?:do|de)\s+sistema)\b",
     "role_change": r"\b(?:voce\s+agora\s+e|you\s+are\s+now|aja\s+como|act\s+as)\b",
-    "delimiter": r"<<<|>>>",
+    "delimiter": _BRACKET_RUN.pattern,  # same runs wrap_candidate neutralizes (ASCII, fullwidth, spaced)
     "auto_approve": r"\baprovad[oa]\s+automaticamente|\bapprove\s+me\b|\baprove[\s-]+me\b",
 }
 _INJECTION = {k: re.compile(v) for k, v in _INJECTION.items()}

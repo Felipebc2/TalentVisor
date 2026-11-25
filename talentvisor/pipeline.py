@@ -165,10 +165,11 @@ def _run(cid: int, stage: list) -> None:
     with Session(db.engine) as s:
         c = s.get(db.Candidate, cid)
         known, form, path, code = json.loads(c.pii_json), json.loads(c.form_json), c.video_path, c.code
+        cloud_ok = c.consent_version == "v1-groq"  # only a consent that names Groq allows raw media to leave (L-04)
 
     stage[0] = "transcribing"
     _update(cid, status="transcribing")
-    tr = stt.transcribe(path)  # deletes the file (REQ-L-01)
+    tr = stt.transcribe(path, allow_cloud=cloud_ok)  # deletes the file (REQ-L-01)
     _update(cid, video_path=None)
 
     text, segs, q = tr["text"], tr["segments"], tr["quality"]

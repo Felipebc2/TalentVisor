@@ -8,9 +8,9 @@
 | WER da transcrição | `metrics.py`, com referência manual quando houver |
 | Precision/recall da anonimização | `scripts/eval.py`, sobre a fixture sintética |
 | Estabilidade contrafactual (nome, gênero, registro) | `scripts/bias_check.py`: Δ ≤ 1 |
-| Taxa de escalonamento para revisão humana | painel |
-| Taxa de detecção de injeção (injeção só dispara revisão, nada é bloqueado) | `evaluation.reasons` |
-| Latência por etapa | `router_log.ms` (p50); sem STT (E1 não grava `router_log`) |
+| Taxa de escalonamento para revisão humana | painel; sobre a **última avaliação de cada candidato** |
+| Taxa de detecção de injeção = fração de candidatos cuja última avaliação tem `injection_detected` (injeção só dispara revisão, nada é bloqueado) | `evaluation.reasons`, última avaliação de cada candidato |
+| Latência por etapa | `router_log.ms` (p50), só linhas `ok` de candidatos reais (`candidate_id` não nulo: eval, bias e `/api/evaluate` ficam fora); sem STT (E1 não grava `router_log`) |
 | Confiança (self-consistency) | desvio das 3 execuções do juiz |
 
 Gatilhos de **REVISÃO HUMANA OBRIGATÓRIA** (SPEC REQ-F-13):
