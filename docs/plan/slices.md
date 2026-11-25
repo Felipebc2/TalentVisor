@@ -19,12 +19,12 @@ As tasks mantêm o ID `T-NN` (rastreabilidade com a [SPEC §11](../spec/spec.md)
 - [x] **T-04** `[SONNET]` `app.py` + `base.html` (Pico + HTMX): consentimento → upload → enviado + lista mínima no painel. *P0 · F-01, F-02, NF-04* · R-S
 
 ## S2: fala → texto (demo: vídeo vira transcrição; `uploads/` vazio)
-- [ ] **T-06** `[SONNET]` `stt.py` faster-whisper + qualidade + apagar o vídeo em `finally`. *P0 · F-04, L-01* · **R-O**
-- [ ] **T-07** `[SONNET]` Fallback Groq em chunks com o fim do chunk anterior como `prompt`, atrás da flag. *P1 · F-05* · R-S
+- [x] **T-06** `[SONNET]` `stt.py` faster-whisper + qualidade + apagar o vídeo em `finally`. *P0 · F-04, L-01* · **R-O**
+- [x] **T-07** `[SONNET]` Fallback Groq em chunks com o fim do chunk anterior como `prompt`, atrás da flag. *P1 · F-05* · R-S
 
 ## S3: privacidade e guarda (demo: nome some do texto; injeção marcada)
-- [ ] **T-08** `[SONNET]` `privacy.py`: PII do CSV + regex + spaCy NER; check de P/R. *P0 · F-06, L-04* · **R-O**
-- [ ] **T-09** `[SONNET]` Injeção: heurística + Prompt Guard + delimitadores escapados. *P0 · F-07* · **R-O**
+- [x] **T-08** `[SONNET]` `privacy.py`: PII do CSV + regex + spaCy NER. *P0 · F-06, L-04* · **R-O**
+- [x] **T-09** `[SONNET]` Injeção: heurística + Prompt Guard + delimitadores escapados. *P0 · F-07* · **R-O**
 
 ## S4: juiz e roteador (demo: notas com evidência + log do roteador)
 - [ ] **T-10** `[SONNET]` `llm.py`: cliente OpenAI-compat, mock, `llm_cache`, Pydantic + retry, assert anti-PII. *P0 · F-08, L-04* · **R-O**
@@ -41,7 +41,7 @@ As tasks mantêm o ID `T-NN` (rastreabilidade com a [SPEC §11](../spec/spec.md)
 - [ ] **T-05** `[SONNET]` `import_dataset.py` + `make import` (recusa `cleared≠Sim`). *P0 · F-03, L-06* · R-S
 - [ ] **T-17** `[SONNET]` `fixtures/synthetic.json` (5 casos) + `scripts/eval.py`. *P1 · Q-01* · R-S
 - [ ] **T-18** `[SONNET]` `scripts/bias_check.py` (Δ≤1). *P1 · Q-02, L-07* · R-S
-- [ ] **T-19** `[SONNET]` `metrics.py` + bloco de métricas no painel. *P1 · Q-03* · R-S
+- [ ] **T-19** `[SONNET]` `metrics.py` + bloco de métricas no painel + check de P/R da anonimização (movido da T-08). *P1 · Q-03* · R-S
 
 ## S7: ponta a ponta e auditoria (demo: o fluxo completo com chaves reais)
 - [ ] **T-20** `[HAIKU]` E2E real: C001 e C003 processados, C002 recusado, `eval.py` anexado → `[OPUS]` valida o aceite. *P0*

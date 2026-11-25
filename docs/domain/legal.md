@@ -5,7 +5,7 @@
 1. Minimização (LGPD art. 6º, III): o vídeo e o áudio são **apagados em `finally`** após a transcrição; a transcrição tem TTL de 7 d.
 2. Nada de biometria, emoção, aparência, voz ou postura como critério.
 3. Nenhuma decisão automatizada final (LGPD art. 20). Não existe decisão com `actor=system`.
-4. LLMs na nuvem recebem **somente texto anonimizado**; o `llm.py` aborta se houver PII conhecido no payload.
+4. LLMs na nuvem recebem **somente texto anonimizado**. PII conhecido é bloqueado (o `llm.py` aborta com assert); outro PII via regex/NER é best-effort, medido no `metrics.py`. Única exceção documentada (D-004, D-035): o fallback de STT na nuvem (REQ-F-05) manda mídia crua (voz, talvez um nome falado) para a Groq, só com `ALLOW_CLOUD_STT=1` (default 0, desligado na demo). Se a flag for ligada, o termo de consentimento precisa nomear o processador externo (Groq).
 5. Log de auditoria de cada avaliação, decisão e escolha do roteador.
 6. Candidato com `liberado_analise != "Sim"` **não é processado**.
 7. Aviso fixo no painel e no PDF: "Recomendação gerada por IA. Decisão final é humana."
