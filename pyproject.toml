@@ -13,6 +13,7 @@ dependencies = [
     "pt_core_news_md",
     "openai",
     "weasyprint",
+    "av<19",  # faster-whisper 1.2.1 passes metadata_errors to av.open; av 19 removed it
 ]
 
 [dependency-groups]
