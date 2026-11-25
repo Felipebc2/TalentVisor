@@ -15,8 +15,8 @@ As tasks mantêm o ID `T-NN` (rastreabilidade com a [SPEC §11](../spec/spec.md)
 - [x] **T-02** `[HAIKU]` Graphify: `uv tool install graphifyy && graphify install --project && graphify update .` *P1*
 
 ## S1: esqueleto andando (demo: upload no navegador → linha "received" no painel)
-- [ ] **T-03** `[SONNET]` `db.py`: tabelas do [modelo de dados](../architecture/data-model.md), engine, `purge_expired()`. *P0 · L-01, L-05* · R-S
-- [ ] **T-04** `[SONNET]` `app.py` + `base.html` (Pico + HTMX): consentimento → upload → enviado + lista mínima no painel. *P0 · F-01, F-02, NF-04* · R-S
+- [x] **T-03** `[SONNET]` `db.py`: tabelas do [modelo de dados](../architecture/data-model.md), engine, `purge_expired()`. *P0 · L-01, L-05* · R-S
+- [x] **T-04** `[SONNET]` `app.py` + `base.html` (Pico + HTMX): consentimento → upload → enviado + lista mínima no painel. *P0 · F-01, F-02, NF-04* · R-S
 
 ## S2: fala → texto (demo: vídeo vira transcrição; `uploads/` vazio)
 - [ ] **T-06** `[SONNET]` `stt.py` faster-whisper + qualidade + apagar o vídeo em `finally`. *P0 · F-04, L-01* · **R-O**

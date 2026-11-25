@@ -1,0 +1,59 @@
+{% extends "base.html" %}
+{% block title %}Enviar candidatura · TalentVisor{% endblock %}
+{% macro err(k) %}{% if errors.get(k) %}<small id="e-{{ k }}" role="alert">{{ errors[k] }}</small>{% endif %}{% endmacro %}
+{% macro bad(k) %}{% if errors.get(k) %}aria-invalid="true" aria-describedby="e-{{ k }}"{% endif %}{% endmacro %}
+{% block content %}
+<h1>Enviar candidatura</h1>
+<h2>Perguntas</h2>
+<p>Responda todas em um único vídeo, até 10 min.</p>
+<ol>{% for code, text in questions %}<li>{{ text }}</li>{% endfor %}</ol>
+
+<form id="up" method="post" action="/upload" enctype="multipart/form-data"
+      hx-post="/upload" hx-encoding="multipart/form-data" hx-target="body" hx-swap="innerHTML" hx-push-url="true">
+  <input type="hidden" name="consent" value="{{ version }}">
+  <label>Vídeo *
+    <input type="file" name="video" accept=".mp4,.webm,.mov" required {{ bad("video") }}>
+    <small>mp4/webm/mov · até 300 MB</small>
+  </label>{{ err("video") }}
+
+  <fieldset>
+    <legend>Seus dados *</legend>
+    <label>Nome completo <input name="name" value="{{ v.get('name', '') }}" required {{ bad("name") }}></label>{{ err("name") }}
+    <label>Instituição <input name="institution" value="{{ v.get('institution', '') }}" required {{ bad("institution") }}></label>{{ err("institution") }}
+    <label>Cidade <input name="city" value="{{ v.get('city', '') }}" required {{ bad("city") }}></label>{{ err("city") }}
+    <small>Usados só para anonimizar o texto; nunca enviados à IA.</small>
+  </fieldset>
+
+  <label>Formação *
+    <input name="education" value="{{ v.get('education', '') }}" required {{ bad("education") }}>
+  </label>{{ err("education") }}
+  <label>Experiência <textarea name="experience">{{ v.get('experience', '') }}</textarea></label>
+  <label>Descrição livre
+    <textarea name="description" placeholder="Conte algo sobre você">{{ v.get('description', '') }}</textarea>
+  </label>
+
+  <details>
+    <summary>Respostas escritas (opcional)</summary>
+    {% for code, text in questions %}
+    <label>{{ code }} <textarea name="{{ code }}" aria-label="Resposta escrita {{ code }}">{{ v.get(code, '') }}</textarea></label>
+    {% endfor %}
+  </details>
+
+  <label>Ou importe um CSV (opcional)
+    <input type="file" name="csv" accept=".csv">
+    <small>Uma linha, separador ';'.</small>
+  </label>
+
+  <button type="submit" id="send">Enviar</button>
+  <progress id="bar" value="0" max="100" hidden></progress>
+</form>
+<script>
+  const f = document.getElementById("up"), bar = document.getElementById("bar"), btn = document.getElementById("send");
+  f.addEventListener("htmx:beforeRequest", () => { btn.disabled = true; bar.hidden = false; });
+  f.addEventListener("htmx:xhr:progress", (e) => {
+    if (e.detail.lengthComputable) bar.value = Math.round((e.detail.loaded / e.detail.total) * 100);
+  });
+  // show server-side 400 (form re-rendered with messages)
+  document.body.addEventListener("htmx:beforeSwap", (e) => { e.detail.shouldSwap = true; });
+</script>
+{% endblock %}

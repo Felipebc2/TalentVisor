@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}TalentVisor{% endblock %}</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@picocss/pico@2.1.1/css/pico.min.css">
+  <link rel="stylesheet" href="/static/style.css">
+  <script src="https://unpkg.com/htmx.org@2.0.4"></script>
+</head>
+<body>
+  <header class="container">
+    <nav>
+      <ul><li><strong><a href="/" class="contrast">TalentVisor</a></strong></li></ul>
+      <ul>
+        <li><a href="/upload">Enviar candidatura</a></li>
+        <li><a href="/dashboard">Painel do recrutador</a></li>
+      </ul>
+    </nav>
+  </header>
+  <main class="container">
+    {% if flash %}<article role="alert" aria-live="polite">{{ flash }}</article>{% endif %}
+    {% block content %}{% endblock %}
+  </main>
+  <footer class="container">
+    {% if request.url.path.startswith("/dashboard") or request.url.path.startswith("/candidate") %}
+      {% from "_macros.html" import ai_notice %}<small>{{ ai_notice() }}</small>
+    {% else %}
+      <small>Vídeo apagado após a transcrição; transcrição mantida por 7 dias. Tratamento conforme a LGPD.</small>
+    {% endif %}
+  </footer>
+</body>
+</html>

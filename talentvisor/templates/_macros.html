@@ -1,0 +1,10 @@
+{% macro status_badge(status) %}
+{%- set m = {
+  "received": "◌ recebido", "transcribing": "◌ transcrevendo…", "anonymizing": "◌ anonimizando…",
+  "scoring": "◌ avaliando…", "auditing": "◌ auditando…", "awaiting_decision": "● aguardando decisão",
+  "approved": "✓ aprovado", "rejected": "✗ reprovado", "refused": "✗ recusado",
+  "second_review": "↺ 2ª avaliação", "error": "! erro"} -%}
+<mark>{{ m.get(status, "◌ " ~ status) }}</mark>
+{%- endmacro %}
+
+{% macro ai_notice() %}Recomendação gerada por IA. Decisão final é humana.{% endmacro %}

@@ -1,0 +1,21 @@
+{% extends "base.html" %}
+{% block title %}Termo de consentimento · TalentVisor{% endblock %}
+{% block content %}
+<h1>Termo de consentimento</h1>
+<dl>
+  <dt>Finalidade</dt>
+  <dd>Apoiar uma pessoa recrutadora na avaliação de competências comportamentais a partir das suas respostas em vídeo. A decisão final é sempre humana.</dd>
+  <dt>O que analisamos</dt>
+  <dd>O conteúdo verbal das respostas (o que você diz).</dd>
+  <dt>O que NÃO analisamos</dt>
+  <dd>Rosto, voz, emoção, aparência e postura.</dd>
+  <dt>Retenção</dt>
+  <dd>O vídeo é apagado logo após a transcrição. A transcrição fica 7 dias; seus dados de candidatura e a avaliação, 30 dias; os registros de auditoria, 90 dias.</dd>
+  <dt>Seus direitos</dt>
+  <dd>Toda decisão é tomada por uma pessoa. Você pode pedir revisão humana pelo código da sua candidatura.</dd>
+</dl>
+<form action="/upload" method="get">
+  <label><input type="checkbox" name="consent" value="{{ version }}" required> Li e aceito o termo (versão {{ version }})</label>
+  <button type="submit">Continuar</button>
+</form>
+{% endblock %}

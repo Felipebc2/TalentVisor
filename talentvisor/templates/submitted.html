@@ -1,0 +1,11 @@
+{% extends "base.html" %}
+{% block title %}Recebido · TalentVisor{% endblock %}
+{% block content %}
+<h1>✓ Recebido!</h1>
+<p>Seu código:</p>
+<p><code id="code" class="code">{{ code }}</code>
+  <button type="button" class="secondary" onclick="navigator.clipboard.writeText('{{ code }}')">Copiar</button></p>
+<p>O que acontece agora: transcrição → análise → revisão por uma pessoa.</p>
+<p>Seu vídeo será apagado logo após a transcrição.</p>
+<p>Quer contestar depois? Use o código em <a href="/contest">/contest</a>.</p>
+{% endblock %}

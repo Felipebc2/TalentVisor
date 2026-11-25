@@ -1,0 +1,7 @@
+{% extends "base.html" %}
+{% block title %}Erro {{ status_code }} · TalentVisor{% endblock %}
+{% block content %}
+<h1>Erro {{ status_code }}</h1>
+<p>{{ message }}</p>
+<p><a href="/">Voltar ao início</a></p>
+{% endblock %}
