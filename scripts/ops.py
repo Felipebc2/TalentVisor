@@ -49,8 +49,12 @@ def events():
     return out
 
 
-def slices():
-    """Slice rows for the page plus {task: (slice, description)} from the checkboxes in slices.md."""
+def slices(closed=()):
+    """Slice rows for the page plus {task: (slice, description)} from slices.md.
+
+    A task counts as done when its checkbox is ticked or the log has a successful CLOSE for it,
+    so the page does not lag while the loop has not ticked the checkbox yet.
+    """
     rows, where, cur = [], {}, None
     for line in SLICES.read_text().splitlines() if SLICES.exists() else []:
         if m := re.match(r"## (S\d+): (.*)", line):
@@ -58,7 +62,7 @@ def slices():
             rows.append(cur)
         elif cur and (m := re.match(r"- \[([ x])\] \*\*(T-\d+)\*\*(.*)", line)):
             cur["total"] += 1
-            cur["done"] += m[1] == "x"
+            cur["done"] += m[1] == "x" or m[2] in closed
             where[m[2]] = (cur["id"], re.sub(r"`?\[[A-Z]+\]`?|[`*]", "", m[3].split(" *P")[0]).strip())
     return rows, where
 
@@ -80,13 +84,24 @@ def nums(ev):
 
 
 def state():
-    evs = events()
-    rows, where = slices()
+    evs = [ev for ev in events() if not str(ev.get("task", "")).startswith("TMP-")]  # loop smoke test, not the project
+    closed = {ev.get("task") for ev in evs if ev.get("step") in ("CLOSE", "COMMIT") and status(ev) == "ok"}
+    rows, where = slices(closed)
     steps = [ev for ev in evs if ev.get("step") in STEPS]
 
+    # Tasks run in parallel: keep the latest step of every task not closed yet, most recent last.
+    running = {}
+    for ev in steps:
+        task = ev.get("task", "")
+        if re.fullmatch(r"T-\d+", task) and task not in closed:
+            running.pop(task, None)
+            running[task] = ev
+
     cur = None
-    if steps and not (steps[-1]["step"] == "COMMIT" and status(steps[-1]) == "ok"):
-        last = steps[-1]
+    last = steps[-1] if steps else None
+    if last and last.get("task") in closed:
+        last = next(reversed(running.values()), None)
+    if last:
         task = last.get("task", "")
         mine = [ev for ev in steps if ev.get("task") == task]
         since = last.get("ts")
@@ -94,22 +109,31 @@ def state():
             if ev["step"] != last["step"]:
                 break
             since = ev.get("ts")
-        seen = {ev["step"] for ev in mine}
         slice_id, desc = where.get(task, (task if re.fullmatch(r"S\d+", task) else None, ""))
+        seen = {ev["step"] for ev in steps if ev.get("task") in (task, slice_id)}  # SYNC is logged per slice
         size = next((ev["size"] for ev in reversed(mine) if ev.get("size")), None)
         cur = {"task": task, "title": f"{task} {desc}".strip()[:90], "slice": slice_id, "phase": phase(last),
                "status": "fail" if status(last) == "fail" else "start", "agent": last.get("agent", ""),
                "since": since, "detail": last.get("msg", ""), "size": f"classe {size}" if size else None,
-               "skipped": [s.replace("_", " ") for s in STEPS[:STEPS.index(last["step"])] if s not in seen]}
+               "skipped": [s.replace("_", " ") for s in STEPS[:STEPS.index(last["step"])] if s not in seen],
+               "parallel": [f"{t} {phase(ev)}" for t, ev in running.items() if t != task]}
+    active = {where[t][0] for t in running if t in where} | ({cur["slice"]} if cur and cur["slice"] else set())
 
     agents = {n: {"name": n, "model": m, "status": "idle"} for n, m in AGENTS.items()}
+    latest, jobs = {}, {}  # jobs: agent -> {task: start event} still open (one agent type, many instances)
     reviews, votes, tries, commits = [], {}, {}, []
     for ev in evs:
         name, task = ev.get("agent", ""), ev.get("task", "")
         if name:
-            agents[name] = {"name": name, "model": ev.get("model") or AGENTS.get(name, ""),
-                            "status": "idle" if ev.get("status") in END else "working",
-                            "detail": f"{task} {phase(ev)} · {ev.get('msg', '')}", "since": ev.get("ts")}
+            latest[name] = ev
+            mine = jobs.setdefault(name, {})
+            if ev.get("status") == "start":
+                mine[task] = ev
+            elif ev.get("status") in END:
+                mine.pop(task, None)
+        if ev.get("step") in ("CLOSE", "COMMIT") and status(ev) == "ok":
+            for mine in jobs.values():
+                mine.pop(task, None)
         if ev.get("step") == "SPEC_REVIEW":
             score, conf = nums(ev)
             if name.startswith("fork-") and conf is not None:
@@ -125,6 +149,12 @@ def state():
             if not re.fullmatch(r"[0-9a-f]{7,40}", sha):
                 sha, subject = "—", ev.get("msg", "")
             commits.append({"hash": sha, "msg": subject, "slice": task, "ts": ev.get("ts")})
+    for name, ev in latest.items():
+        run = list(jobs[name].values())
+        agents[name] = {"name": name, "model": ev.get("model") or AGENTS.get(name, ""),
+                        "status": "working" if run else "idle",
+                        "detail": "  |  ".join(f"{e.get('task', '')} {phase(e)} · {e.get('msg', '')}" for e in run or [ev]),
+                        "since": run[0].get("ts") if run else ev.get("ts")}
 
     feed = []
     for ev in evs[-500:]:
@@ -135,8 +165,9 @@ def state():
                      "agent": ev.get("agent", ""), "status": status(ev), "msg": msg})
 
     return {"project": "TalentVisor", "loop": "agent loop", "gate": GATE,
-            "phases": [s.replace("_", " ") for s in STEPS], "current": cur, "agents": list(agents.values()),
-            "slices": rows, "reviews": reviews, "commits": commits, "events": feed}
+            "phases": [s.replace("_", " ") for s in STEPS], "current": cur, "active": sorted(active),
+            "agents": list(agents.values()), "slices": rows, "reviews": reviews, "commits": commits,
+            "events": feed}
 
 
 class Handler(BaseHTTPRequestHandler):

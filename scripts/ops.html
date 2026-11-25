@@ -467,8 +467,10 @@ const CONFIG = {
        status: "start" | "fail",
        agent, since, detail,            // since = início da etapa
        size,                            // opcional: "classe S|M|L"
-       skipped: [phase]                 // opcional: etapas puladas
+       skipped: [phase],                // opcional: etapas puladas
+       parallel: ["T-07 REVIEW", ...]   // opcional: outras tasks abertas ao mesmo tempo
      },
+     active:  ["S2", ...],              // slices com task aberta
      agents:  [{ name, model: "opus"|"sonnet"|"haiku", status: "working"|"idle",
                  detail, since }],      // since = início (working) ou fim da última atividade (idle)
      slices:  [{ id, name, done, total }],
@@ -590,7 +592,8 @@ function renderNow(s){
         ${cur.size?`<span class="chip">${esc(cur.size)}</span>`:""}
         ${cur.agent?`<span class="chip"><span class="mono">${esc(cur.agent)}</span>${agent?`<span class="model" data-model="${modelKey(agent.model)}"><i></i>${esc(agent.model)}</span>`:""}</span>`:""}
       </div>
-      ${cur.detail?`<p class="now-detail mono">${esc(cur.detail)}</p>`:""}`
+      ${cur.detail?`<p class="now-detail mono">${esc(cur.detail)}</p>`:""}
+      ${(cur.parallel||[]).length?`<div class="now-meta"><span class="chip">em paralelo</span>${cur.parallel.map((p)=>`<span class="chip mono">${esc(p)}</span>`).join("")}</div>`:""}`
     : `<div class="now-kicker"><span>Agora</span></div>
        <h2 class="now-title">Nenhuma tarefa em andamento</h2>
        <p class="muted">O anel volta a girar quando o loop pegar a próxima tarefa.</p>`;
@@ -656,9 +659,9 @@ function renderTiles(s){
 function renderSlices(s){
   const total = s.slices.reduce((a,x)=>a+(+x.total||0),0), done = s.slices.reduce((a,x)=>a+(+x.done||0),0);
   $("slicesAside").textContent = `${done}/${total} tarefas`;
-  const activeId = s.current && s.current.slice;
+  const active = s.active || (s.current && s.current.slice ? [s.current.slice] : []);
   $("slices").innerHTML = s.slices.length ? s.slices.map((x)=>{
-    const isDone = x.total>0 && x.done>=x.total, isActive = x.id===activeId && !isDone;
+    const isDone = x.total>0 && x.done>=x.total, isActive = active.includes(x.id) && !isDone;
     const segs = Array.from({length:Math.max(1,x.total)},(_,i)=>`<i class="${i<x.done?"done":(isActive&&i===x.done?"doing":"")}"></i>`).join("");
     return `<li class="slice ${isDone?"is-done":""} ${isActive?"is-active":""}" data-tip="${esc(x.id)} · ${esc(x.name)}: ${x.done} de ${x.total}${isActive?" (em andamento)":""}">
       <span class="sid">${esc(x.id)}</span><span class="sname">${esc(x.name)}</span>
