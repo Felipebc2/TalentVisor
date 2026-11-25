@@ -1,1 +1,19 @@
-# Filled in T-01 (S0): single service `app`, env_file .env, volume tv-data
+services:
+  app:
+    build: .
+    env_file: .env
+    ports:
+      - "127.0.0.1:8000:8000"  # no login (D-009): never expose on the LAN
+    volumes:
+      # Explicit mounts, never `.`: keeps .env out of the container filesystem (keys only via env_file).
+      - ./talentvisor:/app/talentvisor
+      - ./tests:/app/tests
+      - ./scripts:/app/scripts
+      - ./docs:/app/docs:ro
+      - ./pyproject.toml:/app/pyproject.toml:ro
+      - ./CLAUDE.md:/app/CLAUDE.md:ro
+      - tv-data:/app/data
+    command: uvicorn talentvisor.app:app --host 0.0.0.0 --port 8000 --reload
+
+volumes:
+  tv-data:

@@ -11,11 +11,11 @@ As tasks mantêm o ID `T-NN` (rastreabilidade com a [SPEC §11](../spec/spec.md)
 
 ## S0: infra e chaves (demo: `make up` → `make health` verde)
 - [x] **T-00** `[FELIPE]` Chaves no `.env`; `M5_MODEL=gemini-4-hydrogen`; todos os IDs validados por `scripts/check_models.py` (24/11). *P0 · NF-03*
-- [ ] **T-01** `[SONNET]` `git init`, `pyproject` + `uv.lock`, Dockerfile, `compose.yaml`, Makefile, `.dockerignore`, `GET /health`. *P0 · NF-06, NF-07* · R-S
-- [ ] **T-02** `[HAIKU]` Graphify: `uv tool install graphifyy && graphify install --project && graphify update .` *P1*
+- [x] **T-01** `[SONNET]` `git init`, `pyproject` + `uv.lock`, Dockerfile, `compose.yaml`, Makefile, `.dockerignore`, `GET /health`. *P0 · NF-06, NF-07* · R-S
+- [x] **T-02** `[HAIKU]` Graphify: `uv tool install graphifyy && graphify install --project && graphify update .` *P1*
 
 ## S1: esqueleto andando (demo: upload no navegador → linha "received" no painel)
-- [ ] **T-03** `[SONNET]` `db.py`: tabelas da §6, engine, `purge_expired()`. *P0 · L-01, L-05* · R-S
+- [ ] **T-03** `[SONNET]` `db.py`: tabelas do [modelo de dados](../architecture/data-model.md), engine, `purge_expired()`. *P0 · L-01, L-05* · R-S
 - [ ] **T-04** `[SONNET]` `app.py` + `base.html` (Pico + HTMX): consentimento → upload → enviado + lista mínima no painel. *P0 · F-01, F-02, NF-04* · R-S
 
 ## S2: fala → texto (demo: vídeo vira transcrição; `uploads/` vazio)

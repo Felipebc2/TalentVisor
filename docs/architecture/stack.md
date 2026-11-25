@@ -75,7 +75,7 @@ O plano B, se o front travar, é o Gradio, que reaproveita o mesmo `pipeline.py`
 - **Imagem única CPU** (`python:3.14-slim`, amd64 e arm64). Não há variante GPU nem ajuste para máquina fraca (D-011): `large-v3-turbo` em `int8` na CPU.
 - `apt`: `ffmpeg`, `libpango-1.0-0`, `libpangoft2-1.0-0`, `fonts-dejavu-core` (WeasyPrint). O `uv` é copiado de `ghcr.io/astral-sh/uv`.
 - **Modelos embutidos no build**: o spaCy `pt_core_news_md` e o faster-whisper (`STT_MODEL` como build-arg) já vêm na imagem. Na demo nada é baixado em runtime e o container funciona offline, exceto os LLMs.
-- Venv em `/opt/venv`; o código é montado em `/app` via bind mount, o que permite `--reload` e `make test` sem rebuild.
+- Venv em `/opt/venv`; o código é montado em `/app` via bind mount de pastas explícitas, nunca `.`, para o `.env` não entrar no container ([D-022](../process/decisions.md)), o que permite `--reload` e `make test` sem rebuild.
 - Volume nomeado `tv-data` → `/app/data` (SQLite + uploads temporários).
 - `HEALTHCHECK` chama `GET /health`, que verifica o banco, o modelo STT carregado e se as chaves existem (só se existem, nunca o valor).
 

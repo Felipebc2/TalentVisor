@@ -1,6 +1,17 @@
 .env
+.env.*
+!.env.example
 data/
 *.mp4
+*.mov
+*.webm
+*.mp3
 *.zip
+*.db
 .git/
 graphify-out/
+ops/
+.venv/
+__pycache__/
+.pytest_cache/
+.ruff_cache/
