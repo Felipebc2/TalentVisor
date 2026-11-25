@@ -3,21 +3,19 @@
 {% block content %}
 <header>
   <h1>Candidatura recebida</h1>
-  <p>Guarde o código abaixo. É com ele que você acompanha ou contesta o resultado.</p>
+  <p>Guarde o código abaixo: ele identifica sua candidatura.</p>
 </header>
 <section class="panel">
   <div class="ticket">
     <code id="code" class="code">{{ code }}</code>
     <div>
       <button type="button" class="secondary" onclick="navigator.clipboard.writeText('{{ code }}')">Copiar código</button>
-      <p class="muted" style="margin:0.6rem 0 0">Seu vídeo será apagado logo após a transcrição.</p>
     </div>
   </div>
 </section>
 <ol class="pipeline" aria-label="O que acontece agora">
-  <li><b>Transcrição</b>O vídeo vira texto na nossa máquina e é apagado em seguida.</li>
-  <li><b>Análise</b>A IA lê só o texto anonimizado e aponta trechos como evidência.</li>
-  <li><b>Revisão por uma pessoa</b>Quem decide é uma pessoa recrutadora, nunca a IA.</li>
+  <li><b>Transcrição</b>O vídeo vira texto e é apagado.</li>
+  <li><b>Análise</b>A IA lê só o texto anonimizado.</li>
+  <li><b>Revisão</b>Uma pessoa decide.</li>
 </ol>
-<p class="muted">Quer contestar depois? Use o código em <a href="/contest">/contest</a>.</p>
 {% endblock %}

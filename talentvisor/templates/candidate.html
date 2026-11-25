@@ -3,10 +3,10 @@
 {% block title %}{{ c.code }} · TalentVisor{% endblock %}
 {% block content %}
 <header class="dossier-head">
-  <a class="row-open" href="/dashboard" aria-label="Voltar ao painel"><svg class="ico" style="width:14px;height:14px"><use href="#i-back"/></svg>Painel</a>
+  <a class="back" href="/dashboard"><svg class="ico"><use href="#i-back"/></svg>Voltar ao painel</a>
   <div>
     <h1><span class="mono">{{ c.code }}</span>{{ status_badge(c.status) }}</h1>
-    <p class="who">{% if real_name %}<svg class="ico" style="width:14px;height:14px;vertical-align:-2px"><use href="#i-user"/></svg> {{ real_name }}{% else %}Nome oculto até a decisão (avaliação cega){% endif %}</p>
+    <p class="who">{% if real_name %}<svg class="ico" style="width:14px;height:14px;vertical-align:-2px"><use href="#i-user"/></svg> {{ real_name }}{% else %}nome oculto até a decisão{% endif %}</p>
   </div>
   {% if r %}
   <div class="overall" aria-label="Nota geral">
@@ -36,16 +36,19 @@
       <div class="tabbar" role="presentation"><label for="t1">Soft skills</label><label for="t2">Perfil e hard skills</label></div>
       <div class="pane p1">
         {% for s in r.soft_skills %}
-        <article class="skill">
-          <div class="skill-head"><strong>{{ SKILL_LABELS.get(s.skill, s.skill) }}</strong>{{ score_meter(s.score) }}</div>
+        <div class="skill">
+          {%- set aud = s.auditor_score %}
+          {%- set diverges = s.score is not none and aud is not none and (s.score - aud) | abs >= 2 %}
+          <div class="skill-head" title="confiança {{ s.confidence }} · auditor {{ aud if aud is not none else '—' }}{% if s.run_scores %} · runs {{ s.run_scores | join(' · ') }}{% endif %}">
+            <strong>{{ SKILL_LABELS.get(s.skill, s.skill) }}</strong>{{ score_meter(s.score) }}</div>
           {% if s.score is not none %}
-          <p class="skill-meta"><span{% if s.confidence < 0.7 %} class="warn"{% endif %}>confiança {{ s.confidence }}</span>
-            <span>auditor {{ s.auditor_score if s.auditor_score is not none else "—" }}</span>
-            {% if s.run_scores %}<span>runs {{ s.run_scores | join(" · ") }}</span>{% endif %}</p>
+          {% if s.confidence < 0.7 or diverges %}<p class="skill-flags">
+            {%- if s.confidence < 0.7 %}<span>confiança baixa · {{ s.confidence }}</span>{% endif %}
+            {%- if diverges %}<span>auditor deu {{ aud }}</span>{% endif %}</p>{% endif %}
           {{ evidence(s.evidence, s.question, s.timestamp) }}
-          <p class="just">Justificativa: {{ s.justification }}</p>
+          <details class="why"><summary>Por que {{ s.score }}?</summary><p>{{ s.justification }}</p></details>
           {% endif %}
-        </article>
+        </div>
         {% endfor %}
       </div>
       <div class="pane p2 profile">
@@ -66,18 +69,15 @@
 
     <section class="panel tabs" aria-label="O que o candidato disse e escreveu">
       <input type="radio" name="src" id="s1" checked><input type="radio" name="src" id="s2"><input type="radio" name="src" id="s3">
-      {% if contests %}<input type="radio" name="src" id="s4">{% endif %}
       <div class="tabbar" role="presentation">
         <label for="s1">Transcrição</label><label for="s2">Formulário</label><label for="s3">Log do roteador</label>
-        {% if contests %}<label for="s4">Contestações</label>{% endif %}
       </div>
       <div class="pane q1">
-        <div class="source-meta">
-          <span>duração<b>{{ source.duration | mmss if source.duration else "—" }}</b></span>
-          <span>sem fala (média)<b>{{ "%.0f%%"|format(source.quality.no_speech_prob * 100) if source.quality.no_speech_prob is defined else "—" }}</b></span>
-          <span>trechos inaudíveis<b>{{ "%.0f%%"|format(source.quality.pct_inaudible * 100) if source.quality.pct_inaudible is defined else "—" }}</b></span>
-          <span class="gone"><svg class="ico" style="width:13px;height:13px;vertical-align:-2px"><use href="#i-film"/></svg> Vídeo apagado após a transcrição (LGPD).{% if source.expires_at %} Transcrição anonimizada disponível até {{ source.expires_at }}.{% endif %}</span>
-        </div>
+        <p class="source-meta"{% if source.expires_at %} title="transcrição anonimizada disponível até {{ source.expires_at }}"{% endif %}>
+          <span class="mono">{{ source.duration | mmss if source.duration else "—" }}</span>
+          {%- if source.quality.pct_inaudible is defined and source.quality.pct_inaudible > 0 %}<span class="warn">{{ "%.0f%%"|format(source.quality.pct_inaudible * 100) }} inaudível</span>{% endif %}
+          <span><svg class="ico"><use href="#i-film"/></svg>vídeo apagado (LGPD)</span>
+        </p>
         {% if source.segments %}
         <ol class="segs">{% for seg in source.segments %}<li id="t-{{ seg.start | int }}"><time>{{ seg.start | mmss }}</time><span>{{ seg.text }}</span></li>{% endfor %}</ol>
         {% else %}<p class="empty">Transcrição indisponível (expirou após 7 dias ou veio da API).</p>{% endif %}
@@ -103,11 +103,6 @@
         </table>
         {% else %}<p class="empty">Sem chamadas registradas.</p>{% endif %}
       </div>
-      {% if contests %}
-      <div class="pane q4">
-        <ul class="contests">{% for k in contests %}<li><small class="mono">{{ k.ts }}</small> {{ k.text }}</li>{% endfor %}</ul>
-      </div>
-      {% endif %}
     </section>
 
     {% include "_decision.html" %}

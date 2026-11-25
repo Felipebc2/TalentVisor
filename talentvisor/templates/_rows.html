@@ -1,7 +1,7 @@
 {% from "_macros.html" import status_badge %}
 {% for r in rows %}
-<tr>
-  <td><code>{{ r.code }}</code>{% if r.contested %} <mark class="contest">contestado</mark>{% endif %}</td>
+<tr class="linkrow">
+  <td><code>{{ r.code }}</code></td>
   <td>{{ status_badge(r.status) }}</td>
   <td class="num">{{ r.score if r.score is not none else "—" }}</td>
   <td>{{ r.category or "—" }}</td>

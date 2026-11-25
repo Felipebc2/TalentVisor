@@ -27,16 +27,19 @@ def post(client, filename="minha_entrevista.mp4", ctype="video/mp4", **over):
 
 
 def test_consent_page(client):
-    r = client.get("/")
-    assert r.status_code == 200 and "Termo de consentimento" in r.text and "required" in r.text
+    """UI-01 (D-062): the candidate lands on the form; consent is a required checkbox, the full term opens in a popover."""
+    for path in ("/", "/upload"):
+        r = client.get(path)
+        assert r.status_code == 200 and "Termo de consentimento" in r.text
+        assert 'name="consent" value="v1" required' in r.text and 'id="termo" popover' in r.text and 'popovertarget="termo"' in r.text
 
 
 def test_upload_requires_consent(client):
-    r = client.get("/upload")
-    assert r.status_code == 303 and r.headers["location"] == "/?msg=consent"
     assert "Aceite o termo para continuar." in client.get("/?msg=consent").text
     assert "<script>xss" not in client.get("/?msg=<script>xss").text
-    assert client.get("/upload?consent=v1").status_code == 200
+    r = post(client, consent="", city="Goiânia")
+    assert r.status_code == 400 and "Aceite o termo de consentimento para enviar." in r.text
+    assert 'value="Goiânia"' in r.text  # what was typed is kept
 
 
 def test_upload_without_consent_400(client):
@@ -243,54 +246,6 @@ def test_pdf_route(client, monkeypatch):
     assert seen["d"]["action"] == "approve" and seen["d"]["comment"] == "ok"
 
 
-def _contests():
-    from talentvisor import db
-
-    with Session(db.engine) as s:
-        return s.exec(select(db.AuditLog).where(db.AuditLog.action == "contest")).all()
-
-
-def test_contest_registers_audit(client):
-    cid = seed()
-    r = client.post("/contest", data={"code": "TV-AAAA", "text": "x" * 3000})
-    assert r.status_code == 303 and r.headers["location"] == "/contest?msg=contested"
-    assert "Contestação registrada" in client.get("/contest?msg=contested").text
-    (a,) = _contests()
-    assert a.candidate_id == cid and a.actor == "candidate" and len(json.loads(a.payload_json)["text"]) == 2000
-    from talentvisor import db
-
-    with Session(db.engine) as s:
-        assert s.get(db.Candidate, cid).status == "awaiting_decision"  # REQ-L-03
-
-
-def test_contest_unknown_code_same_message(client):
-    seed()
-    r = client.post("/contest", data={"code": "TV-ZZZZ", "text": "oi"})
-    assert r.status_code == 303 and r.headers["location"] == "/contest?msg=contested"
-    assert _contests() == []
-
-
-def test_dashboard_shows_contested_badge(client):
-    seed()
-    assert "contestado" not in client.get("/dashboard").text
-    client.post("/contest", data={"code": "TV-AAAA", "text": "revisem"})
-    assert "contestado" in client.get("/dashboard").text
-
-
-def test_contest_requires_fields(client):
-    r = client.post("/contest", data={"code": "", "text": " "})
-    assert r.status_code == 400 and r.text.count("Campo obrigatório.") == 2
-    assert _contests() == []
-
-
-def test_detail_lists_contests_escaped(client):
-    cid = seed()
-    assert "Contestações" not in client.get(f"/candidate/{cid}").text
-    client.post("/contest", data={"code": "TV-AAAA", "text": "<b>revisem</b>"})
-    page = client.get(f"/candidate/{cid}").text
-    assert "Contestações" in page and "&lt;b&gt;revisem&lt;/b&gt;" in page and "<b>revisem" not in page
-
-
 def test_name_hidden_again_after_second_review(client):
     cid = seed()
     client.post(f"/candidate/{cid}/decision", data={"decision": "approve", "comment": "ok"})
@@ -336,7 +291,7 @@ def test_consent_names_groq_when_cloud_stt(client, monkeypatch):
 
     groq_audio = "o áudio do vídeo é enviado à Groq"
     html = client.get("/").text
-    assert groq_audio not in html and "/contest" in html and "versão v1" in html
+    assert groq_audio not in html and "/contest" not in html and "versão v1" in html
     monkeypatch.setattr(a, "CLOUD_STT", True)
     monkeypatch.setattr(a, "CONSENT_VERSION", "v1-groq")
     html = client.get("/").text
@@ -362,19 +317,9 @@ def test_detail_shows_router_log(client):
     assert "Log do roteador" in html and "<td>m2</td>" in html and 'class="fallback"' in html
 
 
-def test_upload_required_fields_and_csv_prefill(client):
+def test_upload_required_fields(client):
     r = post(client, institution="")
     assert r.status_code == 400 and "Campo obrigatório." in r.text
-    csv = "nome_pseudonimo;formacao_direito;experiencia_resumida\nAna Lima;Direito;Estágio\n".encode()
-    r = client.post("/upload", data={**FORM, "name": "", "education": "Direito UnB"},
-                    files={"video": ("v.mp4", b"fake", "video/mp4"), "csv": ("c.csv", csv, "text/csv")})
-    assert r.status_code == 303  # CSV pre-filled the empty name
-    from talentvisor import db
-
-    with Session(db.engine) as s:
-        c = s.exec(select(db.Candidate)).one()
-    assert c.real_name == "Ana Lima" and json.loads(c.form_json)["education"] == "Direito UnB"  # user value wins
-    assert json.loads(c.form_json)["experience"] == "Estágio"
 
 
 def test_decision_409_while_processing(client):
@@ -412,5 +357,13 @@ def test_detail_shows_source_side_by_side(client):
         s.commit()
     html = client.get(f"/candidate/{cid}").text
     assert 'id="t-12"' in html and "00:12" in html and 'href="#t-12"' in html  # evidence links to the transcript line
-    assert "Vídeo apagado após a transcrição (LGPD)" in html and "<video" not in html
+    assert "vídeo apagado (LGPD)" in html and "<video" not in html
     assert "Explico com exemplos." in html and "gosto de mediar" in html and "Maria" not in html
+
+
+def test_decision_comment_escaped(client):
+    """NF-04: free text typed by a person (decision comment) is escaped on the page."""
+    cid = seed()
+    client.post(f"/candidate/{cid}/decision", data={"decision": "reject", "comment": "<b>fraco</b>"})
+    page = client.get(f"/candidate/{cid}").text
+    assert "&lt;b&gt;fraco&lt;/b&gt;" in page and "<b>fraco" not in page

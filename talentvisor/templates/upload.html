@@ -3,66 +3,95 @@
 {% macro err(k) %}{% if errors.get(k) %}<small id="e-{{ k }}" role="alert">{{ errors[k] }}</small>{% endif %}{% endmacro %}
 {% macro bad(k) %}{% if errors.get(k) %}aria-invalid="true" aria-describedby="e-{{ k }}"{% endif %}{% endmacro %}
 {% block content %}
-<header>
-  <h1>Enviar candidatura</h1>
-  <p>Dois passos: seus dados à esquerda, o vídeo da entrevista à direita. Campos com * são obrigatórios.</p>
-</header>
-<form id="up" class="split" method="post" action="/upload" enctype="multipart/form-data"
+<header><h1>Enviar candidatura</h1></header>
+<form id="up" class="split fill" method="post" action="/upload" enctype="multipart/form-data"
       hx-post="/upload" hx-encoding="multipart/form-data" hx-target="body" hx-swap="innerHTML" hx-push-url="true">
-  <input type="hidden" name="consent" value="{{ version }}">
 
-  <section class="panel" aria-labelledby="h-form">
-    <h2 id="h-form"><svg class="ico"><use href="#i-user"/></svg>Seus dados</h2>
-    <div class="fields">
-      <fieldset>
-        <legend hidden>Seus dados *</legend>
-        <label class="wide">Nome completo * <input name="name" value="{{ v.get('name', '') }}" required {{ bad("name") }}></label>{{ err("name") }}
-        <label>Instituição * <input name="institution" value="{{ v.get('institution', '') }}" required {{ bad("institution") }}></label>{{ err("institution") }}
-        <label>Cidade * <input name="city" value="{{ v.get('city', '') }}" required {{ bad("city") }}></label>{{ err("city") }}
+  <section class="panel wizard" aria-labelledby="h-form">
+    <div class="wizard-head">
+      <h2 id="h-form"><svg class="ico"><use href="#i-user"/></svg>Seus dados</h2>
+      <ol class="dots" aria-label="Etapas">
+        <li><button type="button" data-go="0" aria-current="step" aria-label="Etapa 1: seus dados e formação"></button></li>
+        <li><button type="button" data-go="1" aria-label="Etapa 2: respostas escritas (opcional)"></button></li>
+      </ol>
+    </div>
+    <div class="track">
+      <fieldset class="step" data-step="0">
+        <legend class="sr-only">Seus dados e formação</legend>
+        <label>Nome completo * <input name="name" value="{{ v.get('name', '') }}" required autocomplete="name" {{ bad("name") }}></label>{{ err("name") }}
+        <div class="pair">
+          <label>Instituição * <input name="institution" value="{{ v.get('institution', '') }}" required {{ bad("institution") }}>{{ err("institution") }}</label>
+          <label>Cidade * <input name="city" value="{{ v.get('city', '') }}" required {{ bad("city") }}>{{ err("city") }}</label>
+        </div>
+        <p class="hint">Dados protegidos (LGPD): nunca vão para a IA.</p>
+        <div class="pair">
+          <label>Formação * <input name="education" value="{{ v.get('education', '') }}" required {{ bad("education") }}>{{ err("education") }}</label>
+          <label>Experiência <input name="experience" value="{{ v.get('experience', '') }}"></label>
+        </div>
+        <label class="grow">Descrição livre
+          <textarea name="description" placeholder="Conte algo sobre você">{{ v.get('description', '') }}</textarea>
+        </label>
       </fieldset>
-      <p class="hint wide">Usados só para anonimizar o texto; nunca enviados à IA.</p>
-      <label class="wide">Formação *
-        <input name="education" value="{{ v.get('education', '') }}" required {{ bad("education") }}>
-      </label>{{ err("education") }}
-      <label>Experiência <textarea name="experience">{{ v.get('experience', '') }}</textarea></label>
-      <label>Descrição livre
-        <textarea name="description" placeholder="Conte algo sobre você">{{ v.get('description', '') }}</textarea>
-      </label>
-      <details class="written wide">
-        <summary>Respostas escritas (opcional)</summary>
+      <fieldset class="step answers" data-step="1">
+        <legend>Respostas escritas (opcional)</legend>
         {% for code, text in questions %}
-        <label>{{ code }} · {{ text }} <textarea name="{{ code }}" aria-label="Resposta escrita {{ code }}">{{ v.get(code, '') }}</textarea></label>
+        <label><span class="mono">{{ code }}</span> {{ text }} <textarea name="{{ code }}" rows="2" aria-label="Resposta escrita {{ code }}">{{ v.get(code, '') }}</textarea></label>
         {% endfor %}
-      </details>
+      </fieldset>
+    </div>
+    <div class="wizard-nav">
+      <button type="button" class="secondary" data-move="-1">Voltar</button>
+      <button type="button" class="secondary" data-move="1">Próximo</button>
     </div>
   </section>
 
   <section class="panel upload" aria-labelledby="h-video">
     <h2 id="h-video"><svg class="ico"><use href="#i-film"/></svg>Vídeo da entrevista</h2>
-    <p class="hint">Responda as 5 perguntas em um único vídeo, até 10 min.</p>
+    <p class="hint">Um único vídeo, até 10 min, respondendo às 5 perguntas.</p>
     <ol class="questions">{% for code, text in questions %}<li>{{ text }}</li>{% endfor %}</ol>
     <label class="drop">
-      <svg class="ico"><use href="#i-upload"/></svg>
-      <b>Vídeo *</b>
-      <small>mp4/webm/mov · até 300 MB · apagado logo após a transcrição</small>
+      <span class="drop-ico"><svg class="ico"><use href="#i-upload"/></svg></span>
+      <span class="drop-text"><b>Escolha o vídeo *</b><small>ou arraste para cá · mp4, webm ou mov · até 300 MB</small></span>
       <span class="picked" id="picked" hidden></span>
       <input type="file" name="video" accept=".mp4,.webm,.mov" required {{ bad("video") }}>
     </label>{{ err("video") }}
-    <label class="csv">Ou importe um CSV com seus dados (opcional)
-      <input type="file" name="csv" accept=".csv">
-    </label>
-    <p class="hint">Uma linha, separador ';'. Preenche só os campos vazios.</p>
-    <button type="submit" id="send">Enviar</button>
+    <div class="consent">
+      <label><input type="checkbox" name="consent" value="{{ version }}" required {{ bad("consent") }}>
+        Li e aceito o <button type="button" class="linkbtn" popovertarget="termo">termo de consentimento</button></label>
+      {{ err("consent") }}
+    </div>
+    <button type="submit" id="send">Enviar candidatura</button>
     <progress id="bar" value="0" max="100" hidden></progress>
   </section>
+  {% include "_consent.html" %}
 </form>
 <script>
   const f = document.getElementById("up"), bar = document.getElementById("bar"), btn = document.getElementById("send");
   const vid = f.querySelector('input[name="video"]'), picked = document.getElementById("picked");
   vid.addEventListener("change", () => { picked.hidden = !vid.files.length; picked.textContent = vid.files.length ? vid.files[0].name : ""; });
+  document.getElementById("aceito").addEventListener("click", () => { f.querySelector('input[name="consent"]').checked = true; });
   f.addEventListener("htmx:beforeRequest", () => { btn.disabled = true; btn.setAttribute("aria-busy", "true"); bar.hidden = false; });
   f.addEventListener("htmx:xhr:progress", (e) => {
     if (e.detail.lengthComputable) bar.value = Math.round((e.detail.loaded / e.detail.total) * 100);
   });
+  // wizard: slide between steps; validate the current step before moving on (no JS: steps stack)
+  const wiz = f.querySelector(".wizard"), steps = [...wiz.querySelectorAll(".step")], dots = [...wiz.querySelectorAll("[data-go]")];
+  const back = wiz.querySelector('[data-move="-1"]'), next = wiz.querySelector('[data-move="1"]');
+  let at = 0;
+  const go = (i) => {
+    at = Math.max(0, Math.min(steps.length - 1, i));
+    wiz.style.setProperty("--at", at);
+    steps.forEach((s, k) => s.inert = k !== at);
+    dots.forEach((d, k) => k === at ? d.setAttribute("aria-current", "step") : d.removeAttribute("aria-current"));
+    back.disabled = at === 0; next.hidden = at === steps.length - 1;
+  };
+  const valid = (i) => [...steps[i].querySelectorAll("input,textarea")].every((el) => el.checkValidity() || (go(i), el.reportValidity(), false));
+  next.addEventListener("click", () => valid(at) && go(at + 1));
+  back.addEventListener("click", () => go(at - 1));
+  dots.forEach((d) => d.addEventListener("click", () => { const i = +d.dataset.go; if (i <= at || [...Array(i).keys()].every(valid)) go(i); }));
+  f.addEventListener("invalid", (e) => { const s = e.target.closest(".step"); if (s) go(+s.dataset.step); }, true);
+  wiz.classList.add("js");
+  const firstBad = f.querySelector('.step [aria-invalid="true"]');
+  go(firstBad ? +firstBad.closest(".step").dataset.step : 0);
 </script>
 {% endblock %}

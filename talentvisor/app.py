@@ -3,8 +3,6 @@
 REQ-F-01, REQ-F-02, REQ-F-14..17, REQ-NF-03, REQ-NF-04, REQ-NF-06. UI: docs/spec/ui.md
 """
 
-import csv
-import io
 import json
 import os
 import secrets
@@ -34,8 +32,7 @@ CONSENT_VERSION = "v1-groq" if CLOUD_STT else "v1"
 MAX_BYTES = 300 * 1024 * 1024
 UPLOAD_DIR = db.UPLOAD_DIR
 VIDEO_TYPES = {".mp4": "video/mp4", ".webm": "video/webm", ".mov": "video/quicktime"}
-FLASH = {"consent": "Aceite o termo para continuar.", "contested": "Contestação registrada. Uma pessoa vai revisar."}  # fixed texts: never echo user input
-CSV_MAP = {"nome_pseudonimo": "name", "formacao_direito": "education", "experiencia_resumida": "experience"}
+FLASH = {"consent": "Aceite o termo para continuar."}  # fixed texts: never echo user input
 TEXT_FIELDS = ("name", "institution", "city", "education", "experience", "description")
 
 
@@ -106,26 +103,16 @@ def health():
     return JSONResponse(body, status_code=200 if body["db"] and body["stt_model"] else 503)
 
 
-@app.get("/")
-def consent(request: Request):
-    return render(request, "consent.html", version=CONSENT_VERSION, cloud_stt=CLOUD_STT)
-
-
 def upload_form(request: Request, status: int = 200, values=None, errors=None):
-    return render(request, "upload.html", status, questions=QUESTIONS.items(), version=CONSENT_VERSION, v=values or {}, errors=errors or {})
+    return render(request, "upload.html", status, questions=QUESTIONS.items(), version=CONSENT_VERSION,
+                  cloud_stt=CLOUD_STT, v=values or {}, errors=errors or {})
 
 
+@app.get("/")
 @app.get("/upload")
-def upload_page(request: Request, consent: str = ""):
-    if consent != CONSENT_VERSION:
-        return RedirectResponse("/?msg=consent", status_code=303)
+def upload_page(request: Request):
+    """The candidate lands on the form; consent is a required checkbox next to "Enviar" (D-062)."""
     return upload_form(request)
-
-
-def _csv_row(raw: bytes) -> dict:
-    """First data row of a ';' CSV mapped to form fields (known columns only)."""
-    row = next(csv.DictReader(io.StringIO(raw[:100_000].decode("utf-8-sig", "replace")), delimiter=";"), {})
-    return {CSV_MAP[k.strip()]: (v or "").strip() for k, v in row.items() if k and k.strip() in CSV_MAP}
 
 
 def _save_video(video) -> tuple[Path | None, str | None]:
@@ -151,15 +138,14 @@ async def upload(request: Request, background_tasks: BackgroundTasks):
     if int(request.headers.get("content-length") or 0) > MAX_BYTES + 1_000_000:
         return error_page(request, 413, "Arquivo muito grande (máx. 300 MB).")
     form = await request.form()
-    if form.get("consent") != CONSENT_VERSION:
-        return error_page(request, 400, "É preciso aceitar o termo de consentimento.")
     v = {k: str(form.get(k) or "").strip() for k in TEXT_FIELDS}
     v.update({p: str(form.get(p) or "").strip() for p in QUESTIONS})
-    csv_file = form.get("csv")
-    if csv_file is not None and getattr(csv_file, "filename", ""):
-        v.update({k: x for k, x in _csv_row(await csv_file.read()).items() if x and not v[k]})
     errors = {k: "Campo obrigatório." for k in ("name", "institution", "city", "education") if not v[k]}
+    if form.get("consent") != CONSENT_VERSION:  # checked before the video is saved: no consent, no file kept
+        errors["consent"] = "Aceite o termo de consentimento para enviar."
     video, path = form.get("video"), None
+    if "consent" in errors:
+        return upload_form(request, 400, v, errors)
     if video is None or not getattr(video, "filename", ""):
         errors["video"] = "Envie o vídeo."
     else:
@@ -206,31 +192,6 @@ def submitted(request: Request, code: str):
     return render(request, "submitted.html", code=code)
 
 
-def contest_form(request: Request, status: int = 200, values=None, errors=None):
-    return render(request, "contest.html", status, v=values or {}, errors=errors or {})
-
-
-@app.get("/contest")
-def contest_page(request: Request):
-    return contest_form(request)
-
-
-@app.post("/contest")
-async def contest(request: Request):
-    form = await request.form()
-    v = {k: str(form.get(k) or "").strip() for k in ("code", "text")}
-    errors = {k: "Campo obrigatório." for k, x in v.items() if not x}
-    if errors:
-        return contest_form(request, 400, v, errors)
-    with Session(db.engine) as s:
-        c = s.exec(select(Candidate).where(Candidate.code == v["code"])).first()
-        if c:  # unknown code: same response, nothing written (no existence oracle). Never touches status/decision.
-            s.add(AuditLog(candidate_id=c.id, actor="candidate", action="contest",
-                           payload_json=json.dumps({"text": v["text"][:2000]}, ensure_ascii=False)))
-            s.commit()
-    return RedirectResponse("/contest?msg=contested", status_code=303)
-
-
 DECIDABLE = ("awaiting_decision", "second_review")
 FINAL = ("approved", "rejected")  # only "second_review" can reopen these
 DECISION_STATUS = {"approve": "approved", "reject": "rejected", "second_review": "second_review"}
@@ -257,12 +218,11 @@ def _dash_rows(flt_status: str, review: bool):
     with Session(db.engine) as s:
         evals = {e.candidate_id: e for e in s.exec(select(Evaluation).order_by(Evaluation.id))}  # later wins
         cands = s.exec(select(Candidate).order_by(Candidate.created_at.desc())).all()
-        contested = set(s.exec(select(AuditLog.candidate_id).where(AuditLog.action == "contest")))
     rows = []
     for c in cands:
         e = evals.get(c.id)
         rows.append({
-            "id": c.id, "code": c.code, "contested": c.id in contested, "status": c.status, "sent": _fmt_ts(c.created_at),
+            "id": c.id, "code": c.code, "status": c.status, "sent": _fmt_ts(c.created_at),
             "score": e.overall_score if e else None, "category": e.category if e else None,
             "review": bool(e and e.human_review), "reasons": [reason_label(r) for r in e.reasons.split(",") if r] if e else [],
         })
@@ -324,13 +284,11 @@ def candidate_page(request: Request, cid: int):
         ev, decision = _evaluation(s, cid), _decision(s, cid)
         result = json.loads(ev.result_json) if ev else None
         logs = s.exec(select(RouterLog).where(RouterLog.candidate_id == cid).order_by(RouterLog.id)).all()
-        contests = [{"ts": _fmt_ts(a.ts), "text": json.loads(a.payload_json).get("text", "")} for a in s.exec(
-            select(AuditLog).where(AuditLog.candidate_id == cid, AuditLog.action == "contest").order_by(AuditLog.id))]
         text = _dtext(decision)
         name = c.real_name if c.status in ("approved", "rejected") else None  # revealed only after a decision (UI-12)
         tr = s.exec(select(Transcript).where(Transcript.candidate_id == cid)).first()
         return render(request, "candidate.html", c=c, real_name=name, r=result, decision=decision, decision_text=text,
-                      logs=logs, contests=contests, processing=c.status in PROCESSING, error="",
+                      logs=logs, processing=c.status in PROCESSING, error="",
                       can_decide=c.status in DECIDABLE + FINAL, only_reopen=c.status in FINAL,
                       source=_source(c, tr))
 

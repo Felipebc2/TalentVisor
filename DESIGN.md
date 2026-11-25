@@ -22,10 +22,14 @@ Rules: red never decorates; every status is dot + word (never color alone); appr
 System UI sans for everything (`--sans`), tabular numerals globally. Mono (`--mono`) only for data: candidate codes, timestamps, confidence/run readouts, model IDs. Big readouts (KPIs, overall score) use tabular sans. Scale: h1 1.55rem, h2 1rem, body 15px, meta 0.76–0.82rem.
 
 ## Layout
-- Recruiter: 228px sidebar + work area; `height: 100vh`, page never scrolls on desktop; panels (`.panel`) scroll inside (`.scroll`, `.tabs .pane`).
+- Recruiter: no sidebar (D-063). Top app bar (`.appbar`: brand · fixed AI notice · "Sair do painel" to `/`) + work area; `height: 100vh`, page never scrolls on desktop; panels (`.panel`) scroll inside (`.scroll`, `.tabs .pane`).
+- Dashboard rows are clickable anywhere (`tr.linkrow`, the `.row-open` link is stretched over the row).
 - Dashboard: readout strip (4 KPIs in one bordered row) → filter row → table panel; metrics column on the right (300px, 248px under 1366px).
-- Candidate analysis: header (back, code + status, overall readout) → review strip → three panels: AI analysis tabs · source tabs (transcript, form, router log, contests) · decision (290px).
-- Candidate world: top bar + centered stage (max 1180px) + LGPD fine print; upload splits "Seus dados" and "Vídeo da entrevista".
+- Candidate analysis: header ("Voltar ao painel", code + status, overall readout) → review strip → three panels: AI analysis tabs · source tabs (transcript, form, router log) · decision (290px). Confidence/auditor/runs appear inline only when they need attention (`.skill-flags`); full numbers in the tooltip; justification behind "Por que N?" (`.why`); transcript meta in one line (`p.source-meta`).
+- Candidate world: top bar + centered stage (max 1180px) + LGPD fine print; the form lands at `/` and splits "Seus dados" and "Vídeo da entrevista".
+  - "Seus dados" is a two-step wizard (`.wizard` > `.track` of `.step`s sliding sideways via `--at`), step dots (`.dots`) only, "Voltar"/"Próximo"; without JS the steps stack.
+  - The video side groups the drop zone (`.drop`: icon + text centered) with the consent checkbox (`.consent`) and "Enviar candidatura".
+  - Consent term: native popover (`.sheet[popover]`), a dark portrait sheet (A4 ratio) in the top layer over a blurred `::backdrop`; "Li e aceito o termo" ticks the box (D-062).
 - Under 980px everything stacks and the page scrolls; no horizontal overflow.
 
 ## Components

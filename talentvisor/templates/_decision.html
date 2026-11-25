@@ -1,4 +1,3 @@
-{% from "_macros.html" import ai_notice %}
 <section id="decision" class="panel" aria-live="polite">
   <h2>Decisão</h2>
   {% if decision %}<p class="verdict"><strong>{{ decision_text }}</strong>{% if decision.comment %}<br><small>Comentário: {{ decision.comment }}</small>{% endif %}</p>{% endif %}
@@ -19,5 +18,4 @@
   </form>
   {% elif error %}<p class="alert" role="alert">{{ error }}</p>{% endif %}
   <a role="button" class="secondary" href="/candidate/{{ c.id }}/report.pdf">{{ "Baixar PDF" if decision and c.status != "second_review" else "Baixar PDF (rascunho)" }}</a>
-  <p class="fine">{{ ai_notice() }}</p>
 </section>

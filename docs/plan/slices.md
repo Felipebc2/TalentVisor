@@ -35,7 +35,7 @@ As tasks mantêm o ID `T-NN` (rastreabilidade com a [SPEC §11](../spec/spec.md)
 ## S5: recrutador e PDF (demo: decidir → nome revelado → PDF)
 - [x] **T-14** `[SONNET]` Painel completo + detalhe do candidato + decisão humana via HTMX. *P0 · F-14, F-15* · R-S
 - [x] **T-15** `[SONNET]` `report.py` + `report.html` → PDF (rascunho antes da decisão). *P0 · F-16* · R-S
-- [x] **T-16** `[HAIKU]` Contestação do candidato. *P2 · F-17*
+- [x] ~~**T-16** `[HAIKU]` Contestação do candidato. *P2 · F-17*~~ removida ([D-063](../process/decisions.md)).
 
 ## S6: dataset e qualidade (demo: C002 recusado; eval e bias verdes)
 - [x] **T-05** `[SONNET]` `import_dataset.py` + `make import` (recusa `cleared≠Sim`). *P0 · F-03, L-06* · R-S

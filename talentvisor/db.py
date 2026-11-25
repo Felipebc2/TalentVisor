@@ -162,7 +162,7 @@ def purge_expired(now: datetime | None = None) -> dict[str, int]:
         for tmp in UPLOAD_DIR.glob("tmp*"):
             if tmp.is_dir() and datetime.fromtimestamp(tmp.stat().st_mtime, UTC) < cutoff:
                 shutil.rmtree(tmp, ignore_errors=True)
-        # REQ-L-01: free text (contest, decision comment) must not outlive its candidate
+        # REQ-L-01: free text (decision comment) must not outlive its candidate
         gone = select(Candidate.id).where(Candidate.created_at < d(30))
         # import markers keep only the pseudonymous dataset_id (not PII) so a purged row is never re-imported
         free_text = AuditLog.action.not_in(["imported", "refused"])

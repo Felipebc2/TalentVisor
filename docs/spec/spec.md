@@ -24,7 +24,7 @@ Interviews are expensive (senior lawyer time) and inconsistent (each interviewer
 
 ## 2. Goal
 
-From **one video** (answers to situational questions) plus a **form** (typed fields, optionally pre-filled from one CSV row), produce an **explainable recommendation** with:
+From **one video** (answers to situational questions) plus a **form** (typed fields), produce an **explainable recommendation** with:
 - soft-skill scores backed by evidence;
 - hard skills (descriptive);
 - profile (descriptive);
@@ -49,7 +49,7 @@ A **human** decides.
 
 | Actor | Can |
 |---|---|
-| Candidate | accept consent, submit video + form, see confirmation code, contest |
+| Candidate | accept consent, submit video + form, see confirmation code |
 | Recruiter | view dashboard, approve, reject, request second review, download PDF |
 | System (agent) | transcribe, anonymize, detect injection, segment, score, audit, route, log |
 
@@ -63,20 +63,19 @@ Priority: **P0** is MVP, **P1** if time allows, **P2** is extra.
 
 **REQ-F-01 (P0) Consent.**
 - The consent version is `v1`, or `v1-groq` when `ALLOW_CLOUD_STT=1` (read at startup). The form sends it as `consent=<version>`.
-- The consent text states: the purpose; what **is** analyzed (verbal content); what is **not** analyzed (face, voice, emotion, appearance, posture); retention (video deleted right after transcription; transcript 7 d; application data + evaluation 30 d; audit logs 90 d, D-026); the right to human review and to contest by code at `/contest` (F-17); who processes (local STT; cloud models from Groq, Google and Mistral receive anonymized text only).
-- Given `/`, when it renders, then the checkbox is `required` (`test_app.py::test_consent_page`).
-- Given no valid `consent`, when `GET /upload`, then 303 to `/?msg=consent` with the flash "Aceite o termo para continuar." (`test_app.py::test_upload_requires_consent`); when `POST /upload`, then 400 and no row (`test_app.py::test_upload_without_consent_400`). D-023.
+- The consent text states: the purpose; what **is** analyzed (verbal content); what is **not** analyzed (face, voice, emotion, appearance, posture); retention (video deleted right after transcription; transcript 7 d; application data + evaluation 30 d; audit logs 90 d, D-026); "Seus direitos": "Toda decisão é tomada por uma pessoa, nunca pela IA. Seu código de candidatura identifica você em qualquer pedido de revisão." (review requests go through the selection-process contact, D-063); who processes (local STT; cloud models from Groq, Google and Mistral receive anonymized text only).
+- The candidate lands on the submission form: `GET /` and `GET /upload` both return 200 with the form (no redirect). Consent is a `required` checkbox `name="consent"` next to "Enviar candidatura"; the full term (same clauses) opens in a native popover (`id="termo" popover`, opened by `popovertarget`) over a blurred backdrop, and "Li e aceito o termo" ticks the box (`test_app.py::test_consent_page`). D-062.
+- Given no valid `consent`, when `POST /upload`, then 400 re-rendering the form with "Aceite o termo de consentimento para enviar." next to the checkbox, values kept (`test_app.py::test_upload_requires_consent`), and nothing saved: no row and the video is not written (`test_app.py::test_upload_without_consent_400`). The flash `?msg=consent` ("Aceite o termo para continuar.") still renders a fixed text. D-023, D-062.
 - Given a valid upload, then `consent_at` and `consent_version` are stored (`test_app.py::test_upload_ok`).
 - Given `ALLOW_CLOUD_STT=1`, when `/` renders, then the text names Groq as the external processor of the audio and the version is `v1-groq` (`test_app.py::test_consent_names_groq_when_cloud_stt`). D-035.
 
 **REQ-F-02 (P0) Upload.**
-- The page shows the 5 questions (P01–P05). Required: video (`mp4|webm|mov`, ≤ 300 MiB), full name, institution, city, education. Optional: experience, description, written answers P01–P05, a CSV file. Name, institution and city are **only** known PII for F-06, never sent to an LLM. Layout: [UI spec §3.2](ui.md).
-- A CSV file (`;`, `utf-8-sig`): its first data row pre-fills only `name` (`nome_pseudonimo`), `education` (`formacao_direito`) and `experience` (`experiencia_resumida`), and only fields left empty in the form. Other columns are ignored.
+- The page shows the 5 questions (P01–P05). Required: video (`mp4|webm|mov`, ≤ 300 MiB), full name, institution, city, education. Optional: experience, description, written answers P01–P05. The form has two steps that slide sideways (step 1: name, institution, city, education, experience, a large free description; step 2: optional written answers P01–P05) with a dot indicator; "Próximo" validates the step; without JS the steps stack (D-062). There is no CSV pre-fill. Name, institution and city are **only** known PII for F-06, never sent to an LLM. Layout: [UI spec §3.2](ui.md).
 - Given a valid submission, when `POST /upload`, then 303 to `/submitted/{code}` (`TV-` + 4 hex), `status=received`, `audit_log(actor=candidate, action=submitted)`, the file saved as `data/uploads/<uuid><ext>` (never the original name), and `pipeline.run` scheduled with FastAPI `BackgroundTasks` after the commit (`test_app.py::test_upload_ok`).
 - Given an invalid extension or mime, then 400 and the form re-renders with values kept and `aria-invalid="true"` (`test_app.py::test_invalid_extension`).
 - Given a video > 300 MiB, then 400 and no file is left (`test_app.py::test_upload_too_big`); given `Content-Length` > 300 MiB + 1 MB, then 413 before the body is read (`test_app.py::test_huge_content_length_413`). Without `Content-Length` (chunked upload) the limit applies only after the body is on disk (§10).
 - Given the DB write fails after the save, then the file is deleted (`test_app.py::test_db_failure_deletes_file`).
-- Given a required field is empty, then 400 with "Campo obrigatório." next to it; given a CSV row and empty name/education, then the CSV fills them and the upload succeeds (`test_app.py::test_upload_required_fields_and_csv_prefill`).
+- Given a required field is empty, then 400 with "Campo obrigatório." next to it (`test_app.py::test_upload_required_fields`).
 
 **REQ-F-03 (P0) Dataset import.**
 - `scripts/import_dataset.py <zip|dir>` reads only `csv/candidatos.csv` and `csv/respostas.csv` (`utf-8-sig`, `;`); the video is `videos/<arquivo_video>`. `id_pergunta` P01..P05 → answers. Only cleared rows get `consent_version="dataset"` and `consent_at` = import time.
@@ -194,10 +193,10 @@ Priority: **P0** is MVP, **P1** if time allows, **P2** is extra.
 - Given a candidate, then the code is shown and the name is not; given none, then "Nenhuma candidatura ainda." (`test_app.py::test_dashboard_has_no_names`).
 - Given a row with `human_review`, then "Revisão obrigatória" + PT-BR reasons; given a status filter, then only matching rows; given a filter with no match, then "Nenhum resultado para o filtro." (`test_app.py::test_dashboard_filters_and_review`, `::test_dashboard_filter_empty_message`).
 - Given a processing row, then the body polls every 3 s; given none, then `/dashboard/rows` answers 286 and polling stops (`test_app.py::test_rows_stop_polling`).
-- Given a `refused` row, then it has no "Abrir" link (`test_app.py::test_refused_row_has_no_open_link`).
+- Every other row is clickable anywhere (stretched "Abrir" link, D-062). Given a `refused` row, then it has no "Abrir" link (`test_app.py::test_refused_row_has_no_open_link`).
 
 **REQ-F-15 (P0) Detail and decision.**
-- `/candidate/{id}` shows per skill score, confidence, auditor score, justification and evidence with timestamp; hard skills, profile, category and consistency; the router log table; the fixed notice "Recomendação gerada por IA. Decisão final é humana."; the decision panel (**Aprovar para entrevista**, **Reprovar**, **Segunda avaliação**) (`test_app.py::test_detail_renders_skills`, `::test_detail_shows_router_log`).
+- `/candidate/{id}` shows per skill score, confidence, auditor score, justification and evidence with timestamp (confidence and auditor are shown inline only when they need attention: confidence < 0.7 or a divergence ≥ 2; the full numbers and runs are in the tooltip; the justification sits behind "Por que N?", D-062); hard skills, profile, category and consistency; the router log table; the fixed notice "Recomendação gerada por IA. Decisão final é humana."; the decision panel (**Aprovar para entrevista**, **Reprovar**, **Segunda avaliação**) (`test_app.py::test_detail_renders_skills`, `::test_detail_shows_router_log`).
 - Given a processing candidate, then a stepper fragment; when it leaves processing, then `HX-Refresh: true` (`test_app.py::test_status_fragment`). Given `status=error`, then the failed stage and a fixed message, no stack trace (`test_app.py::test_detail_error_status`).
 - Given reject without comment, then 422; given a valid decision, then `audit_log(actor=recruiter)` and `HX-Refresh`; given a transition forbidden by §8, then 409 (`test_app.py::test_decision_writes_audit`); given a candidate in a processing status, `error` or `refused`, then 409 for every decision value and no `audit_log(recruiter)` row (`test_app.py::test_decision_409_while_processing`). Given no or unknown decision value, then 422 "Escolha uma decisão." (`test_app.py::test_decision_requires_choice`).
 - Given `approved`/`rejected`, then the real name is shown; given `second_review`, then it is hidden again (blind re-evaluation) (`test_app.py::test_name_hidden_again_after_second_review`). D-041.
@@ -209,18 +208,13 @@ Priority: **P0** is MVP, **P1** if time allows, **P2** is extra.
 - The source of truth is `candidate.status`, not the latest decision row. Given `awaiting_decision` or `second_review`, then the watermark "RASCUNHO — aguardando decisão humana" and no real name, even if an `approve` row exists; given `approved`/`rejected`, then no watermark and the name (if `real_name` is set) (`test_report.py::test_pdf_draft_watermark`, `::test_no_name_before_decision`, `::test_name_follows_candidate_status`). D-044, D-041, D-051.
 - Given 5 skills, then ≤ 2 pages (`test_report.py::test_pages_le_2`); the footer lists the judge and STT model IDs (`test_report.py::test_footer_lists_model_versions`).
 
-**REQ-F-17 (P2) Contest.**
-- `GET /contest` shows a form (code + text). D-049.
-- Given a known code and text, when `POST /contest`, then `audit_log(actor=candidate, action=contest)` with the text trimmed to 2000 chars, 303 to `/contest?msg=contested`, and the candidate's status unchanged (`test_app.py::test_contest_registers_audit`).
-- Given an unknown code, then the same 303 + flash and nothing written (`test_app.py::test_contest_unknown_code_same_message`).
-- Given an empty code or text, then 400 with "Campo obrigatório." and nothing written (`test_app.py::test_contest_requires_fields`).
-- Given any contest, then the dashboard shows "contestado" and `/candidate/{id}` lists date + text, escaped (`test_app.py::test_dashboard_shows_contested_badge`, `::test_detail_lists_contests_escaped`).
+~~REQ-F-17 (P2) Contest.~~ Removed ([D-063](../process/decisions.md)): no `/contest` route; review requests go through the selection-process contact using the candidate code.
 
 ### 5.2 Legal & ethical
 
 | ID | Requirement | Acceptance |
 |---|---|---|
-| REQ-L-01 | Minimization and retention: video/audio deleted after E1; transcript 7 d; candidate and evaluation 30 d; `llm_cache` 7 d; `router_log` and `audit_log` 90 d. On app startup, `db.fail_inflight()` moves every web candidate (`consent_version != "dataset"`) still in `received`/`transcribing`/`anonymizing`/`scoring`/`auditing` to `error` (stage kept in `candidate.error`, `audit_log(system, error)`) and deletes its video: the BackgroundTask died with the process. `purge_expired()` runs at startup (after `fail_inflight`) and after each pipeline; before deleting rows it deletes orphan uploads (`video_path` older than 6 h → file deleted, `received`/`transcribing` → `error`, D-027) and leftover Groq chunk dirs `UPLOAD_DIR/tmp*` older than 6 h. When a candidate is purged (30 d), the `payload_json` of its audit rows (contest text, decision comment) becomes `"{}"`; the row stays 90 d (D-052) | Given E1 succeeds or fails, then no video remains (`test_stt.py::test_video_deleted_even_on_error`, `test_pipeline.py::test_full_mock_run`, `::test_error_sets_status`). Given a web candidate in a processing status at startup, then `error` with the stage kept and no video; a dataset candidate is untouched (`test_db.py::test_startup_fails_inflight`). Given rows past their TTL, when `purge_expired(now)` runs, then exactly those are deleted (`test_db.py::test_purge_expired`). Given an upload older than 6 h, then file deleted and status `error` (`test_db.py::test_purge_orphan_videos`). Given a `tmp*` chunk dir older than 6 h, then it is deleted (`test_db.py::test_purge_orphan_tmp_chunks`). Given a purged candidate, then its audit free text is `"{}"` (`test_db.py::test_purge_redacts_audit_text_of_purged_candidate`) |
+| REQ-L-01 | Minimization and retention: video/audio deleted after E1; transcript 7 d; candidate and evaluation 30 d; `llm_cache` 7 d; `router_log` and `audit_log` 90 d. On app startup, `db.fail_inflight()` moves every web candidate (`consent_version != "dataset"`) still in `received`/`transcribing`/`anonymizing`/`scoring`/`auditing` to `error` (stage kept in `candidate.error`, `audit_log(system, error)`) and deletes its video: the BackgroundTask died with the process. `purge_expired()` runs at startup (after `fail_inflight`) and after each pipeline; before deleting rows it deletes orphan uploads (`video_path` older than 6 h → file deleted, `received`/`transcribing` → `error`, D-027) and leftover Groq chunk dirs `UPLOAD_DIR/tmp*` older than 6 h. When a candidate is purged (30 d), the `payload_json` of its audit rows (decision comment) becomes `"{}"`; the row stays 90 d (D-052) | Given E1 succeeds or fails, then no video remains (`test_stt.py::test_video_deleted_even_on_error`, `test_pipeline.py::test_full_mock_run`, `::test_error_sets_status`). Given a web candidate in a processing status at startup, then `error` with the stage kept and no video; a dataset candidate is untouched (`test_db.py::test_startup_fails_inflight`). Given rows past their TTL, when `purge_expired(now)` runs, then exactly those are deleted (`test_db.py::test_purge_expired`). Given an upload older than 6 h, then file deleted and status `error` (`test_db.py::test_purge_orphan_videos`). Given a `tmp*` chunk dir older than 6 h, then it is deleted (`test_db.py::test_purge_orphan_tmp_chunks`). Given a purged candidate, then its audit free text is `"{}"` (`test_db.py::test_purge_redacts_audit_text_of_purged_candidate`) |
 | REQ-L-02 | No face, voice, emotion, appearance or posture signal is extracted or used | Given the judge and auditor prompts, then they forbid non-verbal inference (`test_prompts.py::test_no_nonverbal_signals_and_cumulative_anchors`, `::test_judge_prompt_covers_rules`). STT receives audio and returns text only |
 | REQ-L-03 | No final automated decision (LGPD art. 20) | Given the source, then no decision is written outside the recruiter route (`test_app.py::test_no_system_decision`). Given a full pipeline run, then no `actor=system` row is a decision and the status stops at `awaiting_decision` (`test_pipeline.py::test_no_system_decision_after_run`) |
 | REQ-L-04 | Cloud receives text anonymized automatically: best-effort with measured precision/recall, never a guarantee that no PII remains. Known PII is blocked (`PIILeakError`, fail closed); other PII via regex/NER is best-effort, measured by `scripts/eval.py` (P/R). Free tiers (Groq, Gemini, Mistral) may use inputs to improve their models; opt out where the provider offers it. Only exception: the flag-gated cloud STT fallback (F-05; D-004, D-035). On `POST /api/evaluate` with `known={}`, removal is regex/NER best-effort only (D-042) | Given known PII in a payload, then no network call (`test_llm.py::test_aborts_on_pii`, `::test_guard_aborts_on_pii`). Given a full run, then the stored anonymized transcript has no name (`test_pipeline.py::test_full_mock_run`) |
@@ -235,7 +229,7 @@ Priority: **P0** is MVP, **P1** if time allows, **P2** is extra.
 | REQ-NF-01 | Full pipeline ≤ 5 min for a 4-min video on CPU | Given the real T-20 import, then `imported` → `evaluated` took 99 s and 120 s per candidate ([D-054](../process/decisions.md)) |
 | REQ-NF-02 | Runs offline with `LLM_MODE=mock` (STT is local anyway). With mock LLM + real STT, mock evidence is not in the transcript → confidence 0.3 on every skill (expected, D-043) | Given `LLM_MODE=mock` and no keys, then a full run reaches `awaiting_decision` (`test_pipeline.py::test_full_mock_run`); `make test` runs with every key blanked (`-e GROQ_API_KEY= …`) and `ALLOW_CLOUD_STT=0` |
 | REQ-NF-03 | Secrets only in `.env` (gitignored); `.env.example` has no values; `/health` reports key *presence*, never values | Given a key set, then `/health` shows `true` and never the value (`test_health.py::test_health_reports_keys_without_leaking`). Given the DB down, then 503 with `db=false` (`test_health.py::test_health_503_when_db_down`). `.env` is in `.gitignore` (`scripts/docs_links.py --check`). `.env.example` holding names only is checked by Felipe: agents are barred from reading it (CLAUDE.md rule 0, D-059) |
-| REQ-NF-04 | Upload: size limit (300 MiB), uuid names, no path traversal; Jinja autoescape (XSS) | Given an oversized upload, then 400/413 and no file (`test_app.py::test_upload_too_big`, `::test_huge_content_length_413`). Given any filename, then the stored path is `<uuid><ext>` under `UPLOAD_DIR` (`test_app.py::test_upload_ok`). Given HTML in user text, then it is escaped (`test_app.py::test_detail_lists_contests_escaped`); flash texts are fixed, never echoed (`test_app.py::test_upload_requires_consent`) |
+| REQ-NF-04 | Upload: size limit (300 MiB), uuid names, no path traversal; Jinja autoescape (XSS) | Given an oversized upload, then 400/413 and no file (`test_app.py::test_upload_too_big`, `::test_huge_content_length_413`). Given any filename, then the stored path is `<uuid><ext>` under `UPLOAD_DIR` (`test_app.py::test_upload_ok`). Given HTML in user text, then it is escaped (`test_app.py::test_decision_comment_escaped`); flash texts are fixed, never echoed (`test_app.py::test_upload_requires_consent`) |
 | REQ-NF-05 | `make test` green (pytest + ruff + docs links + §11 check) before a task is closed | Given a commit, then `make test` exits 0 |
 | REQ-NF-06 | **Portable**: a machine with only Docker runs everything via `make up`; one CPU image (amd64 and arm64); STT and spaCy models baked in at build time; no host Python needed | Given a clean clone with only Docker, when `cp .env.example .env && make up && make health`, then health is 200 (manual) |
 | REQ-NF-07 | **Makefile**: bare `make` prints help; targets `help`, `up`, `down`, `status`, `health`, `logs`, `test`, `import`, `ops`, and only these (`ops` = dev-only live ops dashboard on 127.0.0.1, D-021) | Given the Makefile, then its `.PHONY` list equals these targets (`scripts/docs_links.py --check`, run by `make test`); given `make`, then the help lists them |
@@ -325,12 +319,10 @@ Free-text values (`justification`, profiles, strengths…) are in PT-BR.
 
 | Method | Route | Actor | Response |
 |---|---|---|---|
-| GET | `/` | candidate | consent page |
-| GET | `/upload` | candidate | form (questions visible) · 303 → `/?msg=consent` without `consent=<version>` |
+| GET | `/` | candidate | submission form with the consent checkbox and term popover (D-062) |
+| GET | `/upload` | candidate | same form as `/` (200, no redirect) |
 | POST | `/upload` | candidate | 303 → `/submitted/{code}` · 400 invalid, missing required field, video > 300 MiB, or no `consent=<version>` · 413 when `Content-Length` > 300 MiB + 1 MB (314,572,800 + 1,000,000 bytes) |
 | GET | `/submitted/{code}` | candidate | confirmation · 404 unknown code |
-| GET | `/contest` | candidate | contest form (+ flash after success) |
-| POST | `/contest` | candidate | 303 → `/contest?msg=contested` (also for an unknown code) · 400 empty field |
 | GET | `/dashboard` | recruiter | list (`?status=`, `?review=1`) |
 | GET | `/dashboard/rows` | recruiter | HTMX fragment · 200 while any row is processing, else 286 |
 | GET | `/candidate/{id}` | recruiter | detail · 404 unknown id |
@@ -404,10 +396,10 @@ See the file. Keys: `GROQ_API_KEY`, `GEMINI_API_KEY`, `MISTRAL_API_KEY`, `LLM_MO
 | NF-03 | T-00, T-01 | `test_health.py::test_health_reports_keys_without_leaking`, `::test_health_503_when_db_down` |
 | NF-01 | T-20 | real import, `audit_log` `imported` → `evaluated`: 99 s and 120 s per candidate on CPU, ≤ 300 s ([D-054](../process/decisions.md)) |
 | NF-02 | T-01, T-13 | `test_pipeline.py::test_full_mock_run` (`make test` runs with `LLM_MODE=mock` and no keys) |
-| NF-04 | T-04 | `test_app.py::test_upload_too_big`, `::test_huge_content_length_413`, `::test_upload_ok`, `::test_invalid_extension`, `::test_detail_lists_contests_escaped`, `::test_upload_requires_consent` |
+| NF-04 | T-04 | `test_app.py::test_upload_too_big`, `::test_huge_content_length_413`, `::test_upload_ok`, `::test_invalid_extension`, `::test_decision_comment_escaped`, `::test_upload_requires_consent` |
 | NF-05 | all | `make test` (pytest + ruff + docs links + this §11 check) green before each commit |
 | F-01 | T-04 | `test_app.py::test_consent_page`, `::test_upload_requires_consent`, `::test_upload_without_consent_400`, `::test_upload_ok`, `::test_consent_names_groq_when_cloud_stt` |
-| F-02 | T-04 | `test_app.py::test_upload_ok`, `::test_invalid_extension`, `::test_upload_too_big`, `::test_huge_content_length_413`, `::test_db_failure_deletes_file` , `::test_upload_required_fields_and_csv_prefill` |
+| F-02 | T-04 | `test_app.py::test_upload_ok`, `::test_invalid_extension`, `::test_upload_too_big`, `::test_huge_content_length_413`, `::test_db_failure_deletes_file` , `::test_upload_required_fields` |
 | F-03, L-06 | T-05 | `test_import.py::test_c002_refused`, `::test_idempotent`, `::test_missing_video_skipped_and_dashboard`, `::test_error_row_is_retried`, `::test_purged_row_is_skipped`, `::test_partial_video_deleted_on_copy_error`, `test_db.py::test_purge_keeps_import_marker` |
 | F-04 | T-06 | `test_stt.py::test_happy_path`, `::test_video_deleted_even_on_error`, `::test_zero_segments_is_not_perfect_audio`, `::test_groq_missing_fields_worst_case` |
 | F-05 | T-07 | `test_stt.py::test_chunks_under_25mb`, `::test_cloud_fallback_offsets_and_prompt`, `::test_no_fallback_when_flag_off`, `::test_cloud_needs_groq_consent`, `test_app.py::test_consent_names_groq_when_cloud_stt` |
@@ -422,7 +414,6 @@ See the file. Keys: `GROQ_API_KEY`, `GEMINI_API_KEY`, `MISTRAL_API_KEY`, `LLM_MO
 | F-14 | T-14 | `test_app.py::test_dashboard_has_no_names`, `::test_dashboard_filters_and_review`, `::test_dashboard_filter_empty_message`, `::test_rows_stop_polling`, `::test_refused_row_has_no_open_link` |
 | F-15 | T-14 | `test_app.py::test_detail_renders_skills`, `::test_detail_shows_router_log`, `::test_status_fragment`, `::test_detail_error_status`, `::test_decision_writes_audit`, `::test_name_hidden_again_after_second_review`, `::test_decision_requires_choice`, `::test_decision_409_while_processing` |
 | F-16 | T-15 | `test_app.py::test_pdf_route`, `test_report.py::test_pdf_generated`, `::test_pdf_draft_watermark`, `::test_no_name_before_decision`, `::test_name_follows_candidate_status`, `::test_pages_le_2`, `::test_footer_lists_model_versions` |
-| F-17 | T-16 | `test_app.py::test_contest_registers_audit`, `::test_contest_unknown_code_same_message`, `::test_contest_requires_fields`, `::test_dashboard_shows_contested_badge`, `::test_detail_lists_contests_escaped` |
 | L-01 | T-03, T-06 | `test_stt.py::test_video_deleted_even_on_error`, `test_pipeline.py::test_full_mock_run`, `::test_error_sets_status`, `test_db.py::test_purge_expired`, `::test_purge_orphan_videos`, `::test_purge_orphan_tmp_chunks`, `::test_startup_fails_inflight`, `::test_purge_redacts_audit_text_of_purged_candidate` |
 | L-02 | T-11 | `test_prompts.py::test_no_nonverbal_signals_and_cumulative_anchors`, `::test_judge_prompt_covers_rules` (STT input is audio only) |
 | L-03 | T-13, T-14 | `test_app.py::test_no_system_decision`, `test_pipeline.py::test_no_system_decision_after_run` |
@@ -433,7 +424,7 @@ See the file. Keys: `GROQ_API_KEY`, `GEMINI_API_KEY`, `MISTRAL_API_KEY`, `LLM_MO
 | Q-02 | T-18, T-20 | `scripts/bias_check.py`; `test_bias_check.py::test_gender_swap_map`, `::test_swap_name_parts_and_caps`, `::test_bias_check_mock`, `::test_bias_check_provider_error_inconclusive`; phase 2: [D-054](../process/decisions.md), [t20-bias-real.txt](../evidence/t20-bias-real.txt) |
 | Q-03 | T-19 | `test_metrics.py::test_kappa`, `::test_wer`, `::test_anonymization_pr`, `::test_summary`, `::test_summary_denominators`, `::test_dashboard_renders_metrics` |
 | §7 `/api/*` | T-13, T-17 | `test_app.py::test_api_candidate_json`, `::test_api_evaluate`, `::test_api_evaluate_errors_are_json`, `::test_api_evaluate_writes_audit`, `::test_not_found_html_and_api_json` |
-| UI-01…UI-16 | T-04, T-14, T-15, T-16 | [UI spec §6](ui.md) |
+| UI-01…UI-17 | T-04, T-14, T-15 | [UI spec §6](ui.md) |
 
 <!-- backlinks:start -->
 ---

@@ -1,0 +1,24 @@
+<div id="termo" popover class="sheet" role="dialog" aria-labelledby="sheet-title">
+  <header class="sheet-head">
+    <span class="brand"><span class="mark" aria-hidden="true"></span>TalentVisor</span>
+    <span class="mono">versão {{ version }}</span>
+  </header>
+  <h2 id="sheet-title">Termo de consentimento</h2>
+  <p class="sheet-sub">Candidatura a Advogado(a) Júnior</p>
+  <dl class="clauses">
+    <dt>Finalidade</dt>
+    <dd>Apoiar uma pessoa recrutadora na avaliação de competências comportamentais a partir das suas respostas em vídeo. A decisão final é sempre humana.</dd>
+    <dt>O que analisamos</dt><dd>O conteúdo verbal das respostas (o que você diz).</dd>
+    <dt>O que NÃO analisamos</dt><dd>Rosto, voz, emoção, aparência e postura.</dd>
+    <dt>Retenção</dt>
+    <dd>O vídeo é apagado logo após a transcrição. A transcrição fica 7 dias; seus dados de candidatura e a avaliação, 30 dias; os registros de auditoria, 90 dias.</dd>
+    <dt>Seus direitos</dt>
+    <dd>Toda decisão é tomada por uma pessoa, nunca pela IA. Seu código de candidatura identifica você em qualquer pedido de revisão.</dd>
+    <dt>Quem processa</dt>
+    <dd>A transcrição roda localmente. Modelos de IA na nuvem (Groq, Google e Mistral, fora do Brasil) recebem só o texto, anonimizado automaticamente antes do envio (melhor esforço: algum dado pessoal pode escapar), e planos gratuitos podem usar esses textos para melhorar os modelos.{% if cloud_stt %} <strong>Se a transcrição local falhar, o áudio do vídeo é enviado à Groq (EUA) para transcrição.</strong>{% endif %}</dd>
+  </dl>
+  <footer class="sign">
+    <button type="button" class="secondary" popovertarget="termo" popovertargetaction="hide">Fechar</button>
+    <button type="button" id="aceito" popovertarget="termo" popovertargetaction="hide">Li e aceito o termo</button>
+  </footer>
+</div>

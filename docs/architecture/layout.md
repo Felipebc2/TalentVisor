@@ -36,7 +36,7 @@ TalentVisor/
 │   ├── metrics.py             # kappa, WER, P/R, taxas
 │   ├── templates/
 │   │   ├── base.html  _macros.html
-│   │   ├── consent.html  upload.html  submitted.html  contest.html
+│   │   ├── upload.html  _consent.html  submitted.html   # termo = popover no formulário (D-062)
 │   │   ├── dashboard.html  _rows.html
 │   │   ├── candidate.html  _status.html  _decision.html
 │   │   ├── report.html  error.html
