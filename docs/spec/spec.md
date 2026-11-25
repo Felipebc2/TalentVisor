@@ -64,14 +64,14 @@ Priority: **P0** is MVP, **P1** if time allows, **P2** is extra.
 **REQ-F-01 (P0) Consent.**
 - Given a candidate opens `/`
 - When consent is not checked
-- Then upload is blocked (button disabled; the server returns 400 if a POST arrives without `consent=true`).
+- Then upload is blocked (the browser blocks submit; `GET /upload` without `consent=v1` → 303 to `/` with a flash message; `POST /upload` without `consent=v1` → 400). D-023.
 - The consent text states:
   - the purpose;
   - what **is** analyzed (verbal content);
   - what is **not** analyzed (face, voice, emotion, posture);
   - retention (video deleted after transcription, transcript kept 7 d);
   - the right to review and contest.
-- `consent_at` and `consent_version` are stored.
+- `consent_at` and `consent_version` (`"v1"`) are stored.
 
 **REQ-F-02 (P0) Upload.**
 - The page shows the 5 questions (P01–P05), one video field (`mp4|webm|mov`, ≤ 300 MB), identity fields (full name, institution, city — used **only** as known PII for REQ-F-06, never sent to an LLM), education, experience, an optional description, optional written answers, or one CSV row instead. Layout and states: [UI spec §3.2](ui.md).
@@ -114,7 +114,7 @@ Priority: **P0** is MVP, **P1** if time allows, **P2** is extra.
 **REQ-F-09 (P0) Soft-skill scoring.**
 - The judge (E4) gets the rubric, the 1/3/5 anchors and the segmented answers. For **each skill** it returns `evidence` (verbatim quote) **first**, then `justification`, then `score` (1–5, or `null` with no evidence).
 - It runs 3× (temperature 0.7). The final score per skill is the **median**.
-- `confidence = 1 − min(1, stdev/1.5)`.
+- `confidence = 1 − min(1, pstdev(run_scores)/2)` (population stdev, `statistics.pstdev`): `[5,5,5]` → 1.0; `[5,4,5]` → 0.76 (no review); `[5,3,5]` → 0.53 (review, < 0.7). D-024.
 - The quoted evidence must exist in the text (normalized substring check). Otherwise that skill's confidence is set to 0.3.
 
 **REQ-F-10 (P0) Hard skills, profile, category.**
@@ -222,7 +222,7 @@ Priority: **P0** is MVP, **P1** if time allows, **P2** is extra.
       "justification": "Propõe linguagem acessível e checagem de compreensão.",
       "score": 5,
       "run_scores": [5, 4, 5],
-      "confidence": 0.85,
+      "confidence": 0.76,
       "auditor_score": 4
     }
   ],
@@ -251,8 +251,8 @@ Priority: **P0** is MVP, **P1** if time allows, **P2** is extra.
 | Method | Route | Actor | Response |
 |---|---|---|---|
 | GET | `/` | candidate | consent page |
-| GET | `/upload` | candidate | form (questions visible) |
-| POST | `/upload` | candidate | 303 → `/submitted/{code}` · 400 invalid |
+| GET | `/upload` | candidate | form (questions visible) · 303 → `/` without `consent=v1` |
+| POST | `/upload` | candidate | 303 → `/submitted/{code}` · 400 invalid or without `consent=v1` |
 | GET | `/submitted/{code}` | candidate | confirmation |
 | POST | `/contest` | candidate | 303 (P2) |
 | GET | `/dashboard` | recruiter | list |
@@ -261,9 +261,13 @@ Priority: **P0** is MVP, **P1** if time allows, **P2** is extra.
 | GET | `/candidate/{id}/status` | recruiter | HTMX stepper fragment; `HX-Refresh` when done |
 | POST | `/candidate/{id}/decision` | recruiter | HTMX fragment; 422 on reject without comment |
 | GET | `/candidate/{id}/report.pdf` | recruiter | `application/pdf` |
-| GET | `/health` | ops | `{db, stt_model, keys:{groq:bool, gemini:bool}}` |
+| GET | `/health` | ops | `{db, stt_model, keys:{groq:bool, gemini:bool}}` · 200 when `db` and `stt_model` are true, else 503 (D-025) |
 | GET | `/api/candidates/{id}` | Langflow/external | JSON §6 |
 | POST | `/api/evaluate` | Langflow/external | `{text_anon, questions}` → JSON §6 (no STT) |
+
+- `/health`: missing keys do **not** fail health (`LLM_MODE=mock` works without keys); `keys` only reports presence as booleans.
+- Clean-clone / README step: `cp .env.example .env`, then `make up && make health`.
+- Compose publishes `127.0.0.1:8000` only (no login, D-009).
 
 ## 8. Candidate states
 
@@ -299,14 +303,15 @@ See the file. Keys: `GROQ_API_KEY`, `GEMINI_API_KEY`, `LLM_MODE`, `ALLOW_CLOUD_S
 | REQ | Task | Test / check |
 |---|---|---|
 | NF-06, NF-07 | T-01 | `make up && make health` on a clean clone |
-| F-01, F-02, NF-04 | T-04 | `test_app.py::test_upload_without_consent_400`, `::test_invalid_extension` |
+| NF-03 | T-01 | `test_health.py` (keys are booleans, no value leaks) |
+| F-01, F-02, NF-04 | T-04 | `test_app.py::test_upload_without_consent_400` (POST → 400), `::test_upload_requires_consent` (GET → 303 to `/`, UI-01), `::test_invalid_extension` |
 | F-03, L-06 | T-05 | `test_import.py::test_c002_refused` |
 | F-04, L-01 | T-06 | `test_stt.py::test_video_deleted_even_on_error` |
 | F-05 | T-07 | `test_stt.py::test_chunks_under_25mb` |
 | F-06, L-04 | T-08, T-10 | `test_privacy.py::test_known_pii_removed`, `test_llm.py::test_aborts_on_pii` |
 | F-07 | T-09 | `test_privacy.py::test_injection_detected` + `eval.py` case 5 |
 | F-08 | T-10 | `test_llm.py::test_mock_and_cache`, `::test_retry_on_invalid_json` |
-| F-09, F-10 | T-11, T-13 | `test_pipeline.py::test_median_confidence`, `::test_missing_evidence` |
+| F-09, F-10 | T-11, T-13 | `test_pipeline.py::test_median_confidence` (incl. `[5,4,5]` → 0.76, no review), `::test_missing_evidence` |
 | F-11 | T-12 | `test_router.py` (PII→local, 429→fallback, log written) |
 | F-12, F-13, L-03 | T-13 | `test_pipeline.py::test_review_triggers` |
 | F-14, F-15 | T-14 | `test_app.py::test_decision_writes_audit` + manual check |

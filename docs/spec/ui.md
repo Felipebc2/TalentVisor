@@ -53,7 +53,7 @@ Termo de consentimento
 ```
 
 - **REQ-UI-01:** the checkbox is `required`. Without it, the browser blocks submit (no JS needed).
-- Reaching `/upload` without `consent=v1` redirects to `/` with the flash message "Aceite o termo para continuar."
+- `GET /upload` without `consent=v1` → 303 to `/` with the flash message "Aceite o termo para continuar." `POST /upload` without `consent=v1` → 400 (REQ-F-01, D-023).
 
 ### 3.2 `/upload` — Submission (candidate) · REQ-F-02
 
@@ -201,7 +201,7 @@ Nothing else uses JS.
 
 | ID | Given / When / Then | Test |
 |---|---|---|
-| UI-01 | consent unchecked → submit blocked; `/upload` without consent → redirect to `/` | `test_upload_requires_consent` |
+| UI-01 | consent unchecked → submit blocked; `GET /upload` without `consent=v1` → 303 to `/` | `test_upload_requires_consent` (GET redirect; the POST → 400 case is `test_upload_without_consent_400`, spec §11) |
 | UI-02 | invalid file → form re-rendered with message, values kept | `test_invalid_extension` |
 | UI-06 | no processing rows → `/dashboard/rows` returns 286 | `test_rows_stop_polling` |
 | UI-09 | processing candidate → stepper fragment; finished → `HX-Refresh` | `test_status_fragment` |

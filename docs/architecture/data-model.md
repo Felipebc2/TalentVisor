@@ -15,5 +15,5 @@
 
 <!-- backlinks:start -->
 ---
-**Referenciado por:** [CLAUDE.md](../../CLAUDE.md) · [Estrutura de pastas](layout.md) · [Visão geral da arquitetura](overview.md) · [Regras legais e éticas](../domain/legal.md) · [TalentVisor — Índice da documentação](../index.md)
+**Referenciado por:** [CLAUDE.md](../../CLAUDE.md) · [Estrutura de pastas](layout.md) · [Visão geral da arquitetura](overview.md) · [Regras legais e éticas](../domain/legal.md) · [TalentVisor — Índice da documentação](../index.md) · [Slices, tasks e Definition of Done](../plan/slices.md)
 <!-- backlinks:end -->
