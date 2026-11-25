@@ -4,13 +4,13 @@
 
 | Métrica | Onde |
 |---|---|
-| Concordância IA × humano (Cohen's kappa) | `metrics.py`, a partir das decisões no `audit_log` |
+| Concordância IA × humano (Cohen's kappa) | `metrics.py`, a partir das decisões no `audit_log`. Corte `AI_APPROVE_CUT=3.5` só existe p/ essa métrica, nunca aparece como recomendação (D-046) |
 | WER da transcrição | `metrics.py`, com referência manual quando houver |
-| Precision/recall da anonimização | `metrics.py`, com o PII do CSV como gabarito |
+| Precision/recall da anonimização | `scripts/eval.py`, sobre a fixture sintética |
 | Estabilidade contrafactual (nome, gênero, registro) | `scripts/bias_check.py`: Δ ≤ 1 |
 | Taxa de escalonamento para revisão humana | painel |
-| Taxa de bloqueio de injeção | `router_log` / `audit_log` |
-| Latência por etapa | `router_log.ms` (p50) |
+| Taxa de detecção de injeção (injeção só dispara revisão, nada é bloqueado) | `evaluation.reasons` |
+| Latência por etapa | `router_log.ms` (p50); sem STT (E1 não grava `router_log`) |
 | Confiança (self-consistency) | desvio das 3 execuções do juiz |
 
 Gatilhos de **REVISÃO HUMANA OBRIGATÓRIA** (SPEC REQ-F-13):

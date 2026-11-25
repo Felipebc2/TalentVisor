@@ -2,7 +2,7 @@
 
 > [Índice](../index.md) · [SPEC](../spec/spec.md) · [Modelo de dados](../architecture/data-model.md) · [Dataset](dataset.md)
 
-1. Minimização (LGPD art. 6º, III): o vídeo e o áudio são **apagados em `finally`** após a transcrição; a transcrição tem TTL de 7 d.
+1. Minimização (LGPD art. 6º, III): o vídeo e o áudio são **apagados em `finally`** após a transcrição; a transcrição tem TTL de 7 d. Texto livre no `audit_log` (contestação, comentário) é apagado junto com o candidato (30 d); a linha de auditoria fica 90 d (D-052). PDF baixado sai do controle de retenção do sistema: responsabilidade do recrutador.
 2. Nada de biometria, emoção, aparência, voz ou postura como critério.
 3. Nenhuma decisão automatizada final (LGPD art. 20). Não existe decisão com `actor=system`.
 4. LLMs na nuvem recebem **somente texto anonimizado**. PII conhecido é bloqueado (o `llm.py` aborta com assert); outro PII via regex/NER é best-effort, medido no `metrics.py`. Única exceção documentada (D-004, D-035): o fallback de STT na nuvem (REQ-F-05) manda mídia crua (voz, talvez um nome falado) para a Groq, só com `ALLOW_CLOUD_STT=1` (default 0, desligado na demo). Se a flag for ligada, o termo de consentimento precisa nomear o processador externo (Groq).

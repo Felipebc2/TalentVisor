@@ -80,7 +80,9 @@ Priority: **P0** is MVP, **P1** if time allows, **P2** is extra.
 
 **REQ-F-03 (P0) Dataset import.**
 - `scripts/import_dataset.py <zip|dir>` reads `candidatos.csv`, `respostas.csv` and `videos.csv` (`utf-8-sig`, `;`).
-- Given `liberado_analise != "Sim"`, then no candidate is created and the log records `refused: no authorization`. C002 must be refused.
+- Given `liberado_analise != "Sim"`, then a candidate row is written directly as `status=refused`, `cleared=False`, with **no PII** (`real_name` null, `pii_json {}`, `form_json {}`), no video, never processed; `audit_log(actor=system, action=refused)`; the dashboard shows "✗ recusado". C002 must be refused (D-047).
+- Mapping: `id_pergunta` P01..P05 → answers. Idempotent by `dataset_id`. The pipeline runs synchronously and sequentially; a failing row (e.g. missing video) is reported and skipped, not fatal.
+- The dataset has no institution/city columns, so known PII for imported candidates = `{name}` only; institution/city mentioned in free text rely on regex/NER best-effort (F-06, D-047).
 
 **REQ-F-04 (P0) Local transcription.**
 - faster-whisper (`STT_MODEL`, default `large-v3-turbo`, `int8`, `vad_filter=True`, `language="pt"`, `word_timestamps=True`) yields `{start, end, text}` segments plus the quality signal `{avg_logprob, no_speech_prob, pct_inaudible}`, stored as `transcript.quality_json`.
@@ -118,12 +120,17 @@ Priority: **P0** is MVP, **P1** if time allows, **P2** is extra.
 - Responses are validated with Pydantic. If invalid, there is 1 retry with the error attached, then the router cascade.
 - `LLM_MODE=mock` returns deterministic fixtures (no network).
 - The cache `llm_cache` uses the key sha256(model, messages, temperature, seed).
+- `seed` is sent only to non-Gemini models: Gemini OpenAI-compat answers 400 to any `seed` (even null); Groq needs it to vary the 3 judge runs. D-043.
 
 **REQ-F-09 (P0) Soft-skill scoring.**
 - The judge (E4) gets the rubric, the 1/3/5 anchors and the segmented answers. For **each skill** it returns `evidence` (verbatim quote) **first**, then `justification`, then `score` (1–5, or `null` with no evidence).
 - It runs 3× (temperature 0.7). The final score per skill is the **median**.
 - `confidence = 1 − min(1, pstdev(run_scores)/2)` (population stdev, `statistics.pstdev`): `[5,5,5]` → 1.0; `[5,4,5]` → 0.76 (no review); `[5,3,5]` → 0.53 (review, < 0.7). D-024.
 - The quoted evidence must exist in the text (normalized substring check). Otherwise that skill's confidence is set to 0.3.
+- Null runs (D-039):
+  - all runs `null` for a skill → score `null`, confidence 0.0, reason `no_evidence:<skill>`;
+  - partial nulls (e.g. `[null,5,5]`) = disagreement → median of the numeric runs, confidence capped at 0.5 → `low_confidence:<skill>`.
+- Descriptive fields (category, profiles, hard skills, consistency, strengths/concerns, F-10) come from the **first valid** judge run.
 
 **REQ-F-10 (P0) Hard skills, profile, category.**
 - The same E4 call returns:
@@ -133,19 +140,23 @@ Priority: **P0** is MVP, **P1** if time allows, **P2** is extra.
 - It also returns `written_vs_spoken_consistency`: form answers compared with speech (`high|medium|low` + one sentence). **Does not affect scores.**
 
 **REQ-F-11 (P0) Router.**
-- `route(stage, ctx) -> Choice` applies layers 1→2→3 from [Modelos e roteador](../architecture/models-router.md).
+- `route(stage, ctx) -> list[Choice]` applies layers 1→2→3 from [Modelos e roteador](../architecture/models-router.md) and returns the eligible models in order; `call()` cascades through that list (D-040).
 - Every choice writes `router_log(stage, model, reason, fallback_from, ms, ok, tokens)`.
 - Given text flagged `has_pii=True`, then no cloud model is eligible.
 - Given a 429 on M4, then M5 is used and the log has `fallback_from=M4`.
 
 **REQ-F-12 (P0) Cross-family audit.**
 - E6: M5 (a different model family) re-scores **scores only** with the same rubric.
+- The auditor's family must differ from the family of **every** model used by any E4 run.
 - Given `|judge − auditor| ≥ 2` on any skill, then `human_review=true` with reason `divergence:<skill>`.
+- Given no eligible or working auditor, then `human_review=true` with reason `audit_unavailable` (not an error). D-040.
 
 **REQ-F-13 (P0) Human-review triggers.**
 - `human_review=true` if any of these holds:
   - divergence ≥ 2;
-  - confidence < 0.7 on any skill;
+  - auditor unavailable (`audit_unavailable`, F-12);
+  - confidence < 0.7 on any skill (incl. partial null runs, F-09);
+  - all judge runs null on a skill (`no_evidence:<skill>`, F-09);
   - injection detected;
   - empty transcript or < 30 words;
   - off-topic on ≥ 2 questions;
@@ -163,7 +174,7 @@ Priority: **P0** is MVP, **P1** if time allows, **P2** is extra.
   - the router log (table);
   - the fixed notice "Recomendação gerada por IA. Decisão final é humana.";
   - buttons **Aprovar para entrevista**, **Reprovar** and **Segunda avaliação** (a comment is required to reject).
-- Given a decision, then it is written to `audit_log(actor=recruiter)` and the real name is revealed.
+- Given a decision, then it is written to `audit_log(actor=recruiter)`. The real name is shown only in `approved`/`rejected`, and is hidden again during `second_review` (blind re-evaluation, D-041, §8).
 - **No code path** writes a decision with `actor=system`.
 
 **REQ-F-16 (P0) PDF report.**
@@ -177,19 +188,24 @@ Priority: **P0** is MVP, **P1** if time allows, **P2** is extra.
   - the review badge;
   - the human decision, if any;
   - a footer with the fixed notice, date and model versions.
-- Before a decision, the PDF is watermarked "RASCUNHO — aguardando decisão humana".
+- In `awaiting_decision` and `second_review`, the PDF is watermarked "RASCUNHO — aguardando decisão humana" (D-044).
+- The real name appears in the PDF only for `approved`/`rejected` (D-041, D-051).
 
 **REQ-F-17 (P2) Contest.**
-- The candidate enters the code and a text at `/contest`. It goes to `audit_log(actor=candidate, action=contest)` and a "contested" badge shows on the dashboard.
+- The candidate enters the code and a text at `/contest`. It goes to `audit_log(actor=candidate, action=contest)`. D-049.
+- Given an empty code or text, then 400.
+- Given an unknown code, then the same neutral 303 + flash as a success, and nothing is written.
+- The text is trimmed to 2000 chars. The candidate's status never changes.
+- The dashboard shows a "contestado" badge while any contest exists; `/candidate/{id}` lists the contests (date + text).
 
 ### 5.2 Legal & ethical
 
 | ID | Requirement | Verification |
 |---|---|---|
-| REQ-L-01 | Video and audio deleted after E1; transcript TTL 7 d; `purge_expired()` also deletes orphan uploads (candidate with `video_path` older than 6 h → file deleted, status `error`) and unlinks the video of any purged candidate row (D-027) | test: `uploads/` empty after E1; purge test with a fake clock (+ orphan uploads) |
+| REQ-L-01 | Video and audio deleted after E1; transcript TTL 7 d; `purge_expired()` also deletes orphan uploads (candidate with `video_path` older than 6 h → file deleted, status `error`) and unlinks the video of any purged candidate row (D-027). When a candidate is purged (30 d), the free-text `audit_log.payload_json` of its rows (contest text, decision comment) is redacted to `"{}"`; the audit row itself (actor/action/ts) stays 90 d (D-052) | test: `uploads/` empty after E1; purge test with a fake clock (+ orphan uploads) |
 | REQ-L-02 | No face, voice, emotion, appearance or posture signal is extracted or used | R-O code review; the prompt forbids form-based inference |
 | REQ-L-03 | No final automated decision (LGPD art. 20) | grep: no decision write outside the recruiter route |
-| REQ-L-04 | Cloud receives anonymized text only. Known PII is blocked (assert); other PII via regex/NER is best-effort, measured in `metrics.py`. Only exception: the flag-gated cloud STT fallback (F-05, `ALLOW_CLOUD_STT=1`, default 0; D-004, D-035) | assert in `llm.py` + test using the candidate's name |
+| REQ-L-04 | Cloud receives anonymized text only. Known PII is blocked (assert); other PII via regex/NER is best-effort, measured in `metrics.py`. Only exception: the flag-gated cloud STT fallback (F-05, `ALLOW_CLOUD_STT=1`, default 0; D-004, D-035). On `POST /api/evaluate` with `known={}`, removal is regex/NER best-effort only (D-042) | assert in `llm.py` + test using the candidate's name |
 | REQ-L-05 | Audit log for every evaluation, decision and router choice | `audit_log` and `router_log` populated in the E2E run |
 | REQ-L-06 | `liberado_analise != "Sim"` → not processed | import test with C002 |
 | REQ-L-07 | Informal register or spelling errors are not penalized | `bias_check.py`, Δ ≤ 1 |
@@ -199,7 +215,7 @@ Priority: **P0** is MVP, **P1** if time allows, **P2** is extra.
 | ID | Requirement |
 |---|---|
 | REQ-NF-01 | Full pipeline ≤ 5 min for a 4-min video on CPU |
-| REQ-NF-02 | Runs offline with `LLM_MODE=mock` (STT is local anyway) |
+| REQ-NF-02 | Runs offline with `LLM_MODE=mock` (STT is local anyway). With mock LLM + real STT, mock evidence is not in the transcript → confidence 0.3 on every skill (expected, D-043) |
 | REQ-NF-03 | Secrets only in `.env` (gitignored); `.env.example` has no values; `/health` reports key *presence*, never values |
 | REQ-NF-04 | Upload: size limit, uuid names, no path traversal; Jinja autoescape (XSS) |
 | REQ-NF-05 | `make test` green (pytest + ruff) before a task is closed |
@@ -210,9 +226,9 @@ Priority: **P0** is MVP, **P1** if time allows, **P2** is extra.
 
 | ID | Requirement |
 |---|---|
-| REQ-Q-01 | Synthetic fixtures (5): overall score orders excellent > average > poor; the informal case is within 1 point of its formal twin; injection does not inflate scores and triggers review |
-| REQ-Q-02 | Counterfactual: swapping name, gender and register → Δ ≤ 1 on every skill |
-| REQ-Q-03 | `metrics.py` computes kappa (AI vs human decision), WER (when a reference exists), anonymization P/R, review rate, injection block rate and p50 latency per stage |
+| REQ-Q-01 | Synthetic fixtures (5). **Phase 1, mock (S6):** given `LLM_MODE=mock`, when `scripts/eval.py` runs, then only the `injection_detected` flag and the name-leak check are verified; ordering and Δ are not checked (green by construction). **Phase 2, real run (T-20):** overall orders excellent > average > poor; \|informal − excellent\| ≤ 1 (the "formal twin" is the excellent case); "does not inflate" = overall(injection) ≤ overall(average) + 0.5, and injection triggers review. A provider error (`NoModelAvailable`/429 after retries) = `inconclusive` (exit 2), not FAIL. D-045 |
+| REQ-Q-02 | Counterfactual: swapping name, gender and register. Phase 1 (mock): runs end to end, Δ not checked. Phase 2 (real, T-20): Δ ≤ 1 per skill on the median; provider error = `inconclusive` (exit 2). D-045 |
+| REQ-Q-03 | `metrics.py` computes kappa (AI vs human decision; `AI_APPROVE_CUT=3.5` exists **only** for kappa and is never shown as a recommendation, §10), WER (when a reference exists), review rate, injection detection rate ("taxa de detecção de injeção": injection only triggers review, nothing is blocked) and p50 latency per stage (excludes STT: E1 writes no `router_log`). Anonymization P/R is printed by `scripts/eval.py` over the synthetic fixture. D-046 |
 
 ---
 
@@ -262,16 +278,20 @@ Priority: **P0** is MVP, **P1** if time allows, **P2** is extra.
 | GET | `/upload` | candidate | form (questions visible) · 303 → `/` without `consent=v1` |
 | POST | `/upload` | candidate | 303 → `/submitted/{code}` · 400 invalid or without `consent=v1` · 413 when `Content-Length` > 300 MB |
 | GET | `/submitted/{code}` | candidate | confirmation |
-| POST | `/contest` | candidate | 303 (P2) |
+| POST | `/contest` | candidate | 303 + neutral flash (also for an unknown code) · 400 empty fields (P2) |
 | GET | `/dashboard` | recruiter | list |
 | GET | `/dashboard/rows` | recruiter | HTMX fragment |
 | GET | `/candidate/{id}` | recruiter | detail |
 | GET | `/candidate/{id}/status` | recruiter | HTMX stepper fragment; `HX-Refresh` when done |
-| POST | `/candidate/{id}/decision` | recruiter | HTMX fragment; 422 on reject without comment |
+| POST | `/candidate/{id}/decision` | recruiter | success: `HX-Refresh: true`; 4xx swaps the panel: 422 reject without comment, 409 transition forbidden by §8 |
 | GET | `/candidate/{id}/report.pdf` | recruiter | `application/pdf` |
 | GET | `/health` | ops | `{db, stt_model, keys:{groq:bool, gemini:bool}}` · 200 when `db` and `stt_model` are true, else 503 (D-025) |
 | GET | `/api/candidates/{id}` | Langflow/external | JSON §6 |
-| POST | `/api/evaluate` | Langflow/external | `{text_anon, questions}` → JSON §6 (no STT) |
+| POST | `/api/evaluate` | Langflow/external | `{text, form?, known?}` → JSON §6 (no STT) |
+
+- `/api/*` errors are JSON `{"detail": "..."}` (no HTML). D-050.
+- Known limitation (Luan/Langflow): `/api/candidates/{id}` takes the integer `id`; the external code `TV-XXXX` is not accepted yet. D-050.
+- `/api/evaluate`: the server **always** anonymizes the body. With `known={}` the anti-PII assert protects nothing, so on this route PII removal is regex/NER best-effort (L-04 note, D-042).
 
 - `/health`: missing keys do **not** fail health (`LLM_MODE=mock` works without keys); `keys` only reports presence as booleans.
 - Clean-clone / README step: `cp .env.example .env`, then `make up && make health`.
@@ -290,13 +310,22 @@ stateDiagram-v2
   awaiting_decision --> approved: recruiter
   awaiting_decision --> rejected: recruiter
   awaiting_decision --> second_review: recruiter
-  second_review --> awaiting_decision
+  approved --> second_review: recruiter
+  rejected --> second_review: recruiter
+  second_review --> approved: recruiter
+  second_review --> rejected: recruiter
+  second_review --> second_review: recruiter
   transcribing --> error
+  anonymizing --> error
   scoring --> error
+  auditing --> error
   received --> refused: not cleared
 ```
 
-- `refused` is only for "not cleared". No consent creates no row (`POST /upload` → 400, F-01).
+- Only "Segunda avaliação" reopens an `approved`/`rejected` candidate (UI-12).
+- Real name shown only in `approved`/`rejected`; hidden in `second_review`. D-041.
+
+- `refused` is only for "not cleared". No consent creates no row (`POST /upload` → 400, F-01). The import writes a not-cleared row directly as `refused`, without PII (F-03, D-047).
 - `cleared`: web upload with `consent=v1` → `cleared=True`; dataset import uses `liberado_analise` (F-03, L-06). D-028.
 
 ## 9. Configuration (`.env.example`)
@@ -307,7 +336,7 @@ See the file. Keys: `GROQ_API_KEY`, `GEMINI_API_KEY`, `LLM_MODE`, `ALLOW_CLOUD_S
 
 - No login: `/dashboard` and `/candidate` are open in the demo (debt, D-009).
 - Single process, no external queue.
-- No cutoff score in the MVP; "criticality" uses `overall_score ∈ [2.5, 3.5]`.
+- No cutoff score in the MVP; "criticality" uses `overall_score ∈ [2.5, 3.5]`. `AI_APPROVE_CUT=3.5` is internal to the kappa metric only (Q-03, D-046).
 
 ## 11. Traceability
 
@@ -317,7 +346,7 @@ See the file. Keys: `GROQ_API_KEY`, `GEMINI_API_KEY`, `LLM_MODE`, `ALLOW_CLOUD_S
 | NF-03 | T-01 | `test_health.py` (keys are booleans, no value leaks) |
 | L-01, L-05 | T-03 | `test_db.py::test_purge_expired` (+ orphan uploads) |
 | F-01, F-02, NF-04 | T-04 | `test_app.py::test_upload_without_consent_400` (POST → 400), `::test_upload_requires_consent` (GET → 303 to `/`, UI-01), `::test_invalid_extension`, `::test_upload_ok`, `::test_upload_too_big`, `::test_huge_content_length_413`, `::test_dashboard_has_no_names`, `::test_db_failure_deletes_file` |
-| F-03, L-06 | T-05 | `test_import.py::test_c002_refused` |
+| F-03, L-06 | T-05 | `test_import.py::test_c002_refused`, `::test_idempotent` |
 | F-04, L-01 | T-06 | `test_stt.py::test_video_deleted_even_on_error`, `::test_happy_path`, `::test_zero_segments_is_not_perfect_audio` |
 | F-05 | T-07 | `test_stt.py::test_chunks_under_25mb`, `::test_cloud_fallback_offsets_and_prompt`, `::test_no_fallback_when_flag_off` |
 | F-06, L-04 | T-08, T-10 | `test_privacy.py::test_known_pii_removed`, `::test_regex_replaced`, `::test_ner_catches_unknown_person`, `::test_email_with_name_part_is_one_placeholder`, `test_llm.py::test_aborts_on_pii` |
@@ -326,10 +355,14 @@ See the file. Keys: `GROQ_API_KEY`, `GEMINI_API_KEY`, `LLM_MODE`, `ALLOW_CLOUD_S
 | F-09, F-10 | T-11, T-13 | `test_pipeline.py::test_median_confidence` (incl. `[5,4,5]` → 0.76, no review), `::test_missing_evidence` |
 | F-11 | T-12 | `test_router.py` (PII→local, 429→fallback, log written) |
 | F-12, F-13, L-03 | T-13 | `test_pipeline.py::test_review_triggers` |
+| F-10, L-03 | T-13 | `test_pipeline.py::test_full_mock_run` |
+| §7 `/api/evaluate` | T-13, T-17 | `test_app.py::test_api_evaluate*` |
 | F-14, F-15 | T-14 | `test_app.py::test_decision_writes_audit` + manual check |
-| F-16 | T-15 | `test_report.py::test_pdf_generated` (bytes start with `%PDF`) |
-| Q-01 | T-17 | `scripts/eval.py` |
-| Q-02, L-07 | T-18 | `scripts/bias_check.py` |
+| F-15, D-041 | T-14 | `test_app.py::test_name_hidden_again_after_second_review` |
+| F-16 | T-15 | `test_report.py::test_pdf_generated` (bytes start with `%PDF`), `::test_pdf_draft_watermark`, `::test_no_name_before_decision`, `::test_pages_le_2` (UI-14, UI-15) |
+| F-17 | T-16 | `test_app.py::test_contest_*` |
+| Q-01 | T-17, T-20 | `scripts/eval.py`; phase 1: `tests/test_eval.py` (mock); phase 2: real run (T-20) |
+| Q-02, L-07 | T-18, T-20 | `scripts/bias_check.py`; phase 1: `tests/test_bias_check.py` (mock); phase 2: real run (T-20) |
 | UI-01…UI-16 | T-04, T-14, T-15, T-16 | [UI spec §6](ui.md) |
 | Q-03 | T-19 | `test_metrics.py` (kappa and WER against known values) |
 

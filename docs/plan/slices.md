@@ -27,21 +27,21 @@ As tasks mantêm o ID `T-NN` (rastreabilidade com a [SPEC §11](../spec/spec.md)
 - [x] **T-09** `[SONNET]` Injeção: heurística + Prompt Guard + delimitadores escapados. *P0 · F-07* · **R-O**
 
 ## S4: juiz e roteador (demo: notas com evidência + log do roteador)
-- [ ] **T-10** `[SONNET]` `llm.py`: cliente OpenAI-compat, mock, `llm_cache`, Pydantic + retry, assert anti-PII. *P0 · F-08, L-04* · **R-O**
-- [ ] **T-11** `[OPUS]` `prompts.py`: rubrica, âncoras, hard skills, perfil, categorias. *P0 · F-09, F-10* · R-O
-- [ ] **T-12** `[SONNET]` `router.py` 3 camadas + `router_log`. *P0 · F-11* · **R-O**
-- [ ] **T-13** `[SONNET]` `pipeline.py`: E0–E6, mediana de 3 runs, auditor, gatilhos de revisão. *P0 · F-12, F-13, L-03* · **R-O**
+- [x] **T-10** `[SONNET]` `llm.py`: cliente OpenAI-compat, mock, `llm_cache`, Pydantic + retry, assert anti-PII. *P0 · F-08, L-04* · **R-O**
+- [x] **T-11** `[OPUS]` `prompts.py`: rubrica, âncoras, hard skills, perfil, categorias. *P0 · F-09, F-10* · R-O
+- [x] **T-12** `[SONNET]` `router.py` 3 camadas + `router_log`. *P0 · F-11* · **R-O**
+- [x] **T-13** `[SONNET]` `pipeline.py`: E0–E6, mediana de 3 runs, auditor, gatilhos de revisão. `POST /api/evaluate` entregue junto com os fixes da S4 (D-042). *P0 · F-12, F-13, L-03* · **R-O**
 
 ## S5: recrutador e PDF (demo: decidir → nome revelado → PDF)
-- [ ] **T-14** `[SONNET]` Painel completo + detalhe do candidato + decisão humana via HTMX. *P0 · F-14, F-15* · R-S
-- [ ] **T-15** `[SONNET]` `report.py` + `report.html` → PDF (rascunho antes da decisão). *P0 · F-16* · R-S
-- [ ] **T-16** `[HAIKU]` Contestação do candidato. *P2 · F-17*
+- [x] **T-14** `[SONNET]` Painel completo + detalhe do candidato + decisão humana via HTMX. *P0 · F-14, F-15* · R-S
+- [x] **T-15** `[SONNET]` `report.py` + `report.html` → PDF (rascunho antes da decisão). *P0 · F-16* · R-S
+- [x] **T-16** `[HAIKU]` Contestação do candidato. *P2 · F-17*
 
 ## S6: dataset e qualidade (demo: C002 recusado; eval e bias verdes)
-- [ ] **T-05** `[SONNET]` `import_dataset.py` + `make import` (recusa `cleared≠Sim`). *P0 · F-03, L-06* · R-S
-- [ ] **T-17** `[SONNET]` `fixtures/synthetic.json` (5 casos) + `scripts/eval.py`. *P1 · Q-01* · R-S
-- [ ] **T-18** `[SONNET]` `scripts/bias_check.py` (Δ≤1). *P1 · Q-02, L-07* · R-S
-- [ ] **T-19** `[SONNET]` `metrics.py` + bloco de métricas no painel + check de P/R da anonimização (movido da T-08). *P1 · Q-03* · R-S
+- [x] **T-05** `[SONNET]` `import_dataset.py` + `make import` (recusa `cleared≠Sim`). *P0 · F-03, L-06* · R-S
+- [x] **T-17** `[SONNET]` `fixtures/synthetic.json` (5 casos) + `scripts/eval.py`. *P1 · Q-01* · R-S
+- [x] **T-18** `[SONNET]` `scripts/bias_check.py` (Δ≤1). *P1 · Q-02, L-07* · R-S
+- [x] **T-19** `[SONNET]` `metrics.py` + bloco de métricas no painel + check de P/R da anonimização (movido da T-08). *P1 · Q-03* · R-S
 
 ## S7: ponta a ponta e auditoria (demo: o fluxo completo com chaves reais)
 - [ ] **T-20** `[HAIKU]` E2E real: C001 e C003 processados, C002 recusado, `eval.py` anexado → `[OPUS]` valida o aceite. *P0*

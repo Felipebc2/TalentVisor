@@ -13,6 +13,10 @@
 
 `purge_expired()` roda no startup e após cada pipeline. O vídeo e o áudio **nunca** chegam ao banco: são apagados com `finally: unlink()` logo após o E1.
 
+Candidato importado do dataset (F-03): `pii_json` = só `{name}` (dataset não tem colunas de instituição/cidade; instituição/cidade no texto livre ficam p/ regex/NER best-effort). Não liberado: linha direto em `status=refused`, `cleared=False`, sem PII (`real_name` null, `pii_json {}`, `form_json {}`), sem vídeo (D-047).
+
+Quando o candidato é purgado (30 d), o `payload_json` das linhas dele no `audit_log` (texto de contestação, comentário de decisão) vira `"{}"`; a linha de auditoria (actor/action/ts) fica até 90 d (D-052).
+
 `purge_expired()` também apaga uploads órfãos: candidato com `video_path` há mais de 6 h tem o arquivo apagado e status `error`. Roda antes do delete das linhas, então nenhum vídeo sobrevive à linha do candidato purgado (D-027). O pipeline começa via `BackgroundTasks` depois do commit do upload (a T-13 liga).
 
 <!-- backlinks:start -->

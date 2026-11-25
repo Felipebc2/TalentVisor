@@ -91,8 +91,9 @@ Descrição livre    [ textarea ]  "conte algo sobre você"
 - **REQ-UI-05:** the code is the only identifier shown. The page never shows the score.
 
 ### 3.4 `/contest` — Contest (candidate, P2) · REQ-F-17
-- Fields: code + text (both required). On success, the flash "Contestação registrada. Uma pessoa vai revisar."
-- An unknown code returns the same neutral message, so the page doesn't reveal whether a code exists.
+- Fields: code + text (both required; empty → 400). On success, 303 + flash "Contestação registrada. Uma pessoa vai revisar."
+- An unknown code returns the same neutral 303 + flash and writes nothing, so the page doesn't reveal whether a code exists.
+- Text trimmed to 2000 chars; the candidate's status never changes. Dashboard badge "contestado" while any contest exists (D-049).
 
 ### 3.5 `/dashboard` — Recruiter list · REQ-F-14
 
@@ -109,8 +110,9 @@ TV-02BB  ✗ recusado            —   —                        —           
 - **REQ-UI-06:** the table body polls `GET /dashboard/rows` every 3 s **only while** some row is processing. When none is, the server answers `286`, which makes HTMX stop polling.
 - **REQ-UI-07:** the review badge shows the text "Revisão obrigatória" plus the reasons in `title` and in a `<details>` on small screens.
 - **REQ-UI-08:** empty state "Nenhuma candidatura ainda." with a link to `/upload`.
+- "✗ recusado" = dataset row not cleared for analysis (F-03): no PII, no [Abrir] (D-047).
 - No names here. Rows are sorted by "revisão obrigatória" first, then by date desc.
-- **(P1)** below the table, a `<details>` "Métricas" block shows: review rate, injection blocks, p50 latency per stage, and kappa once ≥ 3 decisions exist ([Métricas](../domain/metrics.md)).
+- **(P1)** below the table, a `<details>` "Métricas" block shows: review rate, "taxa de detecção de injeção" (injection only triggers review), p50 latency per stage (no STT), and kappa once ≥ 3 decisions exist. The kappa cut (`AI_APPROVE_CUT`) is never shown as a recommendation (D-046) ([Métricas](../domain/metrics.md)).
 
 ### 3.6 `/candidate/{id}` — Detail and decision · REQ-F-15
 
@@ -141,12 +143,13 @@ Consistência escrita × fala: alta — …             │
   - the evidence in a `<blockquote>` with the question and timestamp;
   - the justification.
   A `null` score shows "sem evidência suficiente".
-- **REQ-UI-12 (decision):** `hx-post` to `/candidate/{id}/decision` swaps the decision panel in place with the result ("Aprovado para entrevista por recrutador em 24/11 18:30").
-  - Rejecting without a comment → 422 → inline message "Comentário obrigatório para reprovar."
-  - After a decision the real name appears in the header ("TV-7F3A · Jadeh P. P.").
+- **REQ-UI-12 (decision):** `hx-post` to `/candidate/{id}/decision`; on success the server answers `HX-Refresh` and the page reloads with the result ("Aprovado para entrevista por recrutador em 24/11 18:30"). D-044.
+  - 4xx swaps the panel (global htmx 4xx swap in `base.html`): rejecting without a comment → 422 "Comentário obrigatório para reprovar."; a transition forbidden by spec §8 → 409 (D-050).
+  - After `approved`/`rejected` the real name appears in the header ("TV-7F3A · Jadeh P. P."); it is hidden again in `second_review` (blind re-evaluation, D-041).
   - The panel becomes read-only; only "Segunda avaliação" can reopen it.
+- **Contestações** section: lists the candidate's contests (date + text), when any exist (F-17, D-049).
 - **REQ-UI-13 (router log):** a collapsible table from `router_log` with all fields, fallbacks highlighted.
-- **REQ-UI-14:** the PDF button says "Baixar PDF (rascunho)" before the decision and "Baixar PDF" after it.
+- **REQ-UI-14:** the PDF button says "Baixar PDF (rascunho)" in `awaiting_decision`/`second_review` and "Baixar PDF" in `approved`/`rejected` (D-044).
 
 ### 3.7 PDF — `report.html` (A4, print CSS) · REQ-F-16
 
@@ -162,6 +165,7 @@ Revisão humana: sim — motivos…      Decisão: aprovado por recrutador em �
 Recomendação gerada por IA. Decisão final é humana. · modelos: … · p. 1/2
 ```
 
+- Real name in the PDF only for `approved`/`rejected`; never in `awaiting_decision`/`second_review` (D-041, D-051).
 - **REQ-UI-15:** the PDF fits on ≤ 2 pages for 5 skills; WeasyPrint `@page` sets the footer and page numbers; no external fetches at render time (CSS inlined).
 
 ### 3.8 Errors
@@ -178,9 +182,11 @@ Recomendação gerada por IA. Decisão final é humana. · modelos: … · p. 1/
 | `stepper(status)` | `<ol>` of stages, current stage marked `aria-current="step"` |
 | `ai_notice()` | fixed footer sentence |
 
-Reason codes → PT-BR labels (one dict in `app.py`):
+Reason codes → PT-BR labels (one dict, `REASON_LABELS` in `report.py`, imported by `app.py`; D-050):
 - `divergence:<skill>` → "divergência em <skill>";
 - `low_confidence:<skill>` → "confiança baixa em <skill>";
+- `no_evidence:<skill>` → "sem evidência em <skill>";
+- `audit_unavailable` → "auditoria indisponível";
 - `injection_detected` → "possível manipulação do prompt";
 - `empty_transcript` → "transcrição vazia ou curta";
 - `off_topic` → "respostas fora do tema";
@@ -194,7 +200,7 @@ Reason codes → PT-BR labels (one dict in `app.py`):
 | Upload form | `htmx:xhr:progress` | — | updates `<progress>` |
 | Dashboard tbody | `every 3s` | `GET /dashboard/rows?<filters>` | `innerHTML`; `286` stops polling |
 | Candidate stepper | `every 3s` | `GET /candidate/{id}/status` | `outerHTML`; `HX-Refresh` when done |
-| Decision panel | submit | `POST /candidate/{id}/decision` | `outerHTML` of the panel |
+| Decision panel | submit | `POST /candidate/{id}/decision` | success: `HX-Refresh: true` (page reload); 4xx (422/409): `outerHTML` of the panel |
 
 Nothing else uses JS.
 
@@ -206,8 +212,10 @@ Nothing else uses JS.
 | UI-02 | invalid file → form re-rendered with message, values kept | `test_invalid_extension` |
 | UI-06 | no processing rows → `/dashboard/rows` returns 286 | `test_rows_stop_polling` |
 | UI-09 | processing candidate → stepper fragment; finished → `HX-Refresh` | `test_status_fragment` |
-| UI-12 | reject without comment → 422; with comment → `audit_log(actor=recruiter)`, name revealed | `test_decision_writes_audit` |
-| UI-14 | PDF before decision contains "RASCUNHO" | `test_pdf_draft_watermark` |
+| UI-12 | reject without comment → 422; with comment → `audit_log(actor=recruiter)`, name revealed; `second_review` hides it again | `test_decision_writes_audit`, `test_name_hidden_again_after_second_review` |
+| UI-14 | PDF in `awaiting_decision`/`second_review` contains "RASCUNHO" and no real name | `test_report.py::test_pdf_draft_watermark`, `::test_no_name_before_decision` |
+| UI-15 | PDF ≤ 2 pages for 5 skills | `test_report.py::test_pages_le_2` |
+| F-17 | contest: empty → 400; unknown code → same 303, nothing written | `test_contest_*` |
 | UI-P5 | 360 px viewport: no horizontal page scroll (manual, browser devtools) | manual |
 
 Tasks: [T-04](../plan/slices.md) (3.1–3.3, 3.8, minimal 3.5), [T-14](../plan/slices.md) (3.5, 3.6), [T-15](../plan/slices.md) (3.7), [T-16](../plan/slices.md) (3.4).
