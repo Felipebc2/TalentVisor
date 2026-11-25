@@ -36,7 +36,8 @@ Roteador `route(etapa, ctx) -> Escolha(modelo, motivo, fallback)`. Toda chamada 
   - `modo_demo` → +1 Groq;
   - cota restante < 20% → −3.
 - **Camada 3, escalonamento:**
-  - JSON inválido ou confiança < 0,7 → sobe de modelo;
+  - JSON inválido → sobe de modelo;
+  - confiança < 0,7 → **revisão humana** (gatilho da REQ-F-13), não escala de modelo (D-032);
   - fallbacks: M4→M5→M3 e M1→M1b (só se a flag estiver ligada);
   - divergência ≥ 2 entre juiz e auditor → **revisão humana** (não escala).
 

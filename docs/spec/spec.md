@@ -69,13 +69,13 @@ Priority: **P0** is MVP, **P1** if time allows, **P2** is extra.
   - the purpose;
   - what **is** analyzed (verbal content);
   - what is **not** analyzed (face, voice, emotion, posture);
-  - retention (video deleted after transcription, transcript kept 7 d);
-  - the right to review and contest.
+  - retention per data type: video deleted right after transcription; transcript 7 d; application data + evaluation 30 d; audit logs 90 d (D-026);
+  - the right to human review, and to contest by code when available (F-17, P2).
 - `consent_at` and `consent_version` (`"v1"`) are stored.
 
 **REQ-F-02 (P0) Upload.**
 - The page shows the 5 questions (P01–P05), one video field (`mp4|webm|mov`, ≤ 300 MB), identity fields (full name, institution, city — used **only** as known PII for REQ-F-06, never sent to an LLM), education, experience, an optional description, optional written answers, or one CSV row instead. Layout and states: [UI spec §3.2](ui.md).
-- Given a valid submission, then the response is 303 to `/submitted/{code}` and the pipeline starts in the background.
+- Given a valid submission, then the response is 303 to `/submitted/{code}` and the pipeline starts in the background (FastAPI `BackgroundTasks`, scheduled after the upload commit; T-13 wires it).
 - Invalid extension or mime → 400. Files are saved under a uuid name in `data/uploads/`, never the original name.
 
 **REQ-F-03 (P0) Dataset import.**
@@ -83,7 +83,7 @@ Priority: **P0** is MVP, **P1** if time allows, **P2** is extra.
 - Given `liberado_analise != "Sim"`, then no candidate is created and the log records `refused: no authorization`. C002 must be refused.
 
 **REQ-F-04 (P0) Local transcription.**
-- faster-whisper (`STT_MODEL`, default `large-v3-turbo`, `int8`, `vad_filter=True`, `language="pt"`, `word_timestamps=True`) yields `{start, end, text}` segments plus the quality signal `{avg_logprob, no_speech_prob, pct_inaudible}`.
+- faster-whisper (`STT_MODEL`, default `large-v3-turbo`, `int8`, `vad_filter=True`, `language="pt"`, `word_timestamps=True`) yields `{start, end, text}` segments plus the quality signal `{avg_logprob, no_speech_prob, pct_inaudible}`, stored as `transcript.quality_json`.
 - Then the video file is deleted in a `finally` block, **even on error**.
 
 **REQ-F-05 (P1) Cloud STT fallback.**
@@ -178,7 +178,7 @@ Priority: **P0** is MVP, **P1** if time allows, **P2** is extra.
 
 | ID | Requirement | Verification |
 |---|---|---|
-| REQ-L-01 | Video and audio deleted after E1; transcript TTL 7 d; `purge_expired()` | test: `uploads/` empty after E1; purge test with a fake clock |
+| REQ-L-01 | Video and audio deleted after E1; transcript TTL 7 d; `purge_expired()` also deletes orphan uploads (candidate with `video_path` older than 6 h → file deleted, status `error`) and unlinks the video of any purged candidate row (D-027) | test: `uploads/` empty after E1; purge test with a fake clock (+ orphan uploads) |
 | REQ-L-02 | No face, voice, emotion, appearance or posture signal is extracted or used | R-O code review; the prompt forbids form-based inference |
 | REQ-L-03 | No final automated decision (LGPD art. 20) | grep: no decision write outside the recruiter route |
 | REQ-L-04 | Cloud receives anonymized text only | assert in `llm.py` + test using the candidate's name |
@@ -252,7 +252,7 @@ Priority: **P0** is MVP, **P1** if time allows, **P2** is extra.
 |---|---|---|---|
 | GET | `/` | candidate | consent page |
 | GET | `/upload` | candidate | form (questions visible) · 303 → `/` without `consent=v1` |
-| POST | `/upload` | candidate | 303 → `/submitted/{code}` · 400 invalid or without `consent=v1` |
+| POST | `/upload` | candidate | 303 → `/submitted/{code}` · 400 invalid or without `consent=v1` · 413 when `Content-Length` > 300 MB |
 | GET | `/submitted/{code}` | candidate | confirmation |
 | POST | `/contest` | candidate | 303 (P2) |
 | GET | `/dashboard` | recruiter | list |
@@ -285,8 +285,11 @@ stateDiagram-v2
   second_review --> awaiting_decision
   transcribing --> error
   scoring --> error
-  received --> refused: no consent / not cleared
+  received --> refused: not cleared
 ```
+
+- `refused` is only for "not cleared". No consent creates no row (`POST /upload` → 400, F-01).
+- `cleared`: web upload with `consent=v1` → `cleared=True`; dataset import uses `liberado_analise` (F-03, L-06). D-028.
 
 ## 9. Configuration (`.env.example`)
 
@@ -304,7 +307,8 @@ See the file. Keys: `GROQ_API_KEY`, `GEMINI_API_KEY`, `LLM_MODE`, `ALLOW_CLOUD_S
 |---|---|---|
 | NF-06, NF-07 | T-01 | `make up && make health` on a clean clone |
 | NF-03 | T-01 | `test_health.py` (keys are booleans, no value leaks) |
-| F-01, F-02, NF-04 | T-04 | `test_app.py::test_upload_without_consent_400` (POST → 400), `::test_upload_requires_consent` (GET → 303 to `/`, UI-01), `::test_invalid_extension` |
+| L-01, L-05 | T-03 | `test_db.py::test_purge_expired` (+ orphan uploads) |
+| F-01, F-02, NF-04 | T-04 | `test_app.py::test_upload_without_consent_400` (POST → 400), `::test_upload_requires_consent` (GET → 303 to `/`, UI-01), `::test_invalid_extension`, `::test_upload_ok`, `::test_upload_too_big`, `::test_huge_content_length_413`, `::test_dashboard_has_no_names`, `::test_db_failure_deletes_file` |
 | F-03, L-06 | T-05 | `test_import.py::test_c002_refused` |
 | F-04, L-01 | T-06 | `test_stt.py::test_video_deleted_even_on_error` |
 | F-05 | T-07 | `test_stt.py::test_chunks_under_25mb` |

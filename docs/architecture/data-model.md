@@ -4,14 +4,16 @@
 
 | Tabela | Campos principais | TTL |
 |---|---|---|
-| `candidate` | `id`, `code`, `real_name` (revelado só após a decisão), `consent_at`, `consent_version`, `cleared`, `status`, `created_at` | 30 d |
-| `transcript` | `candidate_id`, `text_anon`, `segments_json`, `quality` (logprob/no_speech), `expires_at` | **7 d** |
+| `candidate` | `id`, `code`, `real_name` (revelado só após a decisão), `consent_at`, `consent_version`, `cleared`, `status`, `error` (failed stage), `video_path` (upload on disk, cleared after STT), `form_json` (education, experience, description, answers P01–P05), `pii_json` (name, institution, city: local-only for `privacy.py`, never sent to an LLM), `created_at` | 30 d |
+| `transcript` | `candidate_id`, `text_anon`, `segments_json`, `quality_json` ({avg_logprob, no_speech_prob, pct_inaudible}), `expires_at` | **7 d** |
 | `evaluation` | `candidate_id`, `result_json` (schema da [SPEC §6](../spec/spec.md)), `overall_score`, `category`, `human_review`, `reasons` | 30 d |
 | `router_log` | `candidate_id`, `stage`, `model`, `reason`, `fallback_from`, `ms`, `ok`, `tokens`, `ts` | 90 d |
 | `audit_log` | `candidate_id`, `actor` (system/recruiter/candidate), `action`, `payload_json`, `ts` | 90 d |
 | `llm_cache` | `key` (sha256 de modelo+prompt), `response`, `ts` | 7 d |
 
 `purge_expired()` roda no startup e após cada pipeline. O vídeo e o áudio **nunca** chegam ao banco: são apagados com `finally: unlink()` logo após o E1.
+
+`purge_expired()` também apaga uploads órfãos: candidato com `video_path` há mais de 6 h tem o arquivo apagado e status `error`. Roda antes do delete das linhas, então nenhum vídeo sobrevive à linha do candidato purgado (D-027). O pipeline começa via `BackgroundTasks` depois do commit do upload (a T-13 liga).
 
 <!-- backlinks:start -->
 ---

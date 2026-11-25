@@ -46,8 +46,9 @@ Termo de consentimento
   ▸ Finalidade            (1 short paragraph)
   ▸ O que analisamos      conteúdo verbal das respostas (o que você diz)
   ▸ O que NÃO analisamos  rosto, voz, emoção, aparência, postura
-  ▸ Retenção              vídeo apagado após a transcrição; texto por 7 dias
-  ▸ Seus direitos         revisão humana, contestação pelo código
+  ▸ Retenção              vídeo: apagado logo após a transcrição; transcrição: 7 dias;
+                          dados da candidatura + avaliação: 30 dias; registros de auditoria: 90 dias
+  ▸ Seus direitos         revisão humana; contestação pelo código (quando disponível)
   [x] Li e aceito o termo (versão v1)            ← required checkbox
   [ Continuar ]                                  ← GET /upload?consent=v1
 ```
@@ -189,7 +190,7 @@ Reason codes → PT-BR labels (one dict in `app.py`):
 
 | Where | Trigger | Request | Swap |
 |---|---|---|---|
-| Upload form | submit | `POST /upload` (multipart) | none; 303 redirect followed |
+| Upload form | submit | `POST /upload` (multipart) | `body` (XHR follows the 303, `hx-push-url`); a 400 re-render is swapped in via `htmx:beforeSwap`; without JS a plain POST + 303 |
 | Upload form | `htmx:xhr:progress` | — | updates `<progress>` |
 | Dashboard tbody | `every 3s` | `GET /dashboard/rows?<filters>` | `innerHTML`; `286` stops polling |
 | Candidate stepper | `every 3s` | `GET /candidate/{id}/status` | `outerHTML`; `HX-Refresh` when done |
