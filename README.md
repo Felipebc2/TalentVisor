@@ -5,22 +5,21 @@ Triagem de candidatos a **Advogado(a) Júnior** por soft skills, a partir das re
 MVP acadêmico da disciplina "Agentes Autônomos de IA" (IDP). Tudo roda em Docker, na sua máquina, em `127.0.0.1`.
 
 ```mermaid
-flowchart TD
+flowchart LR
   subgraph local["Na sua máquina"]
-    direction LR
+    direction TB
     V["Vídeo + formulário"] --> STT["Transcrição<br/>(faster-whisper)"]
     STT -->|vídeo apagado| A["Anonimização<br/>(regex + spaCy)"]
   end
-  subgraph cloud["Nuvem: só texto anonimizado"]
-    direction LR
+  subgraph cloud["Nuvem (anonimizado)"]
+    direction TB
     J["Juiz LLM ×3<br/>(Groq / Gemini / Mistral)"] --> AU["Auditor de<br/>outra família"]
   end
   subgraph human["Pessoa recrutadora"]
-    direction LR
-    P["Painel com evidências"] --> D["Decisão humana + PDF"]
+    direction TB
+    P["Painel com<br/>evidências"] --> D["Decisão humana<br/>+ PDF"]
   end
-  A --> J
-  AU --> P
+  local --> cloud --> human
 ```
 
 ---
