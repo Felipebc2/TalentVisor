@@ -17,10 +17,10 @@ MAX_429_WAITS = 3  # 3 judge calls of ~4k tokens don't fit one 8k-TPM minute
 MAX_WAIT_S = 65  # Groq free tier resets TPM per minute; one judge call is ~half the 8k TPM, so wait it out
 _cooldown: dict[str, float] = {}  # model -> monotonic time until which it is skipped
 _REL = {  # relevance 0-10 per slot (M3/M4/M5/M5F) x stage
-    "M3": {"E3": 9, "E4": 6, "E5": 6, "E6": 5},
-    "M4": {"E3": 7, "E4": 9, "E5": 8, "E6": 7},
-    "M5": {"E3": 7, "E4": 8, "E5": 9, "E6": 9},
-    "M6": {"E3": 6, "E4": 7, "E5": 7, "E6": 8},  # D-055: backup, third family
+    "M3": {"E3": 9, "E4": 6, "E6": 5},  # E5 (report) is folded into E4: no separate call
+    "M4": {"E3": 7, "E4": 9, "E6": 7},
+    "M5": {"E3": 7, "E4": 8, "E6": 9},
+    "M6": {"E3": 6, "E4": 7, "E6": 8},  # D-055: backup, third family
 }
 
 
@@ -71,7 +71,6 @@ def route(stage: str, ctx: dict) -> list[Choice]:
             (tokens > 8000 and slot == "M5", 2, "long"),
             (hard and slot in ("M4", "M5"), 2, "hard"),
             (ctx.get("demo") and family(model) == "gpt-oss", 1, "demo"),
-            (ctx.get("critical") and stage == "E4" and slot == "M4", 100, "critical"),
         ]:
             if on:
                 score += bonus

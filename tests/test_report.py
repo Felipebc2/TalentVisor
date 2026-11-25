@@ -38,3 +38,8 @@ def test_pages_le_2():
     html = render_html(CAND, RESULT, APPROVE)
     assert len(HTML(string=html).render().pages) <= 2
     assert "sem evidência suficiente" in html and "divergência em Ética" in html
+
+
+def test_footer_lists_model_versions():
+    html = render_html(CAND, RESULT, None)
+    assert "modelos:" in html and "openai/gpt-oss-120b" in html and "faster-whisper/large-v3-turbo" in html

@@ -29,6 +29,13 @@ def test_judge_prompt_covers_rules():
     assert user.count(p.DATA_START) == 6  # 5 answers + form
 
 
+def test_no_nonverbal_signals_and_cumulative_anchors():
+    """REQ-L-02: judge and auditor are told never to use voice/face/emotion/appearance/posture; D-053 anchors."""
+    for system in (p.JUDGE_SYSTEM, p.AUDITOR_SYSTEM):
+        assert "Never infer or mention voice, tone, accent, face, emotion, appearance or posture" in system
+        assert "Anchors are cumulative" in system and "pick the lower" in system
+
+
 def test_schemas_reject_bad_values():
     bad_category = {**p.MOCK_JUDGE, "category": "Líder Nato"}
     missing_skill = {**p.MOCK_JUDGE, "soft_skills": p.MOCK_JUDGE["soft_skills"][:4]}

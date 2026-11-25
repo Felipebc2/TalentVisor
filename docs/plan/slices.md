@@ -72,12 +72,12 @@ S2 e S3 rodam **em paralelo** (arquivos disjuntos). Até o S7 tudo roda com `LLM
 
 ## Definition of Done (MVP)
 
-[ ] C001 e C003 percorrem o fluxo upload/import → painel → decisão → PDF; o C002 é recusado com mensagem.
-- [ ] Nenhum vídeo ou áudio em disco após o E1; nenhuma chamada de nuvem com o nome real (verificado no log).
-- [ ] `eval.py`: ordena ótima > média > ruim; Δ(informal)≤1; injeção sem efeito e marcada para revisão.
-- [ ] Painel mostra o log do roteador, o selo de revisão com o motivo e o aviso fixo.
-- [ ] `make up` numa máquina limpa (só Docker) sobe e `make health` fica verde.
-- [ ] `make test` verde (pytest + ruff).
+- [ ] C001 e C003 percorrem o fluxo upload/import → painel → decisão → PDF; o C002 é recusado com mensagem. Feito: import real com C001 e C003 avaliados e C002 recusado ([D-054](../process/decisions.md), [D-056](../process/decisions.md)); decisão e PDF cobertos só em mock (`test_decision_writes_audit`, `test_pdf_route`). Falta: decisão → PDF com dados reais no ensaio da demo.
+- [x] Nenhum vídeo ou áudio em disco após o E1; nenhuma chamada de nuvem com o nome real. Evidência: `test_full_mock_run`, `test_video_deleted_even_on_error`, `test_aborts_on_pii`; run real com vídeo apagado mesmo no erro ([D-054](../process/decisions.md)).
+- [x] `eval.py`: ordena ótima > média > ruim; Δ(informal)≤1; injeção sem efeito e marcada para revisão. Evidência: Q-01 e Q-02 PASS no run real ([D-054](../process/decisions.md)).
+- [x] Painel mostra o log do roteador, o selo de revisão com o motivo e o aviso fixo. Evidência: `test_detail_renders_skills`, `test_detail_shows_router_log`, `test_dashboard_filters_and_review`.
+- [ ] `make up` numa máquina limpa (só Docker) sobe e `make health` fica verde. Falta: conferir num clone limpo (manual, NF-06).
+- [ ] `make test` verde (pytest + ruff + `docs_links --check`). Marcar depois do último `make test` antes do commit.
 
 <!-- backlinks:start -->
 ---

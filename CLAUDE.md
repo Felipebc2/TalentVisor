@@ -53,7 +53,7 @@ make logs | make status | make down
 make ops                  # dash de live ops do loop de agentes em http://localhost:8001
 ```
 
-Fim de cada slice: gate **SPEC REVIEW** (`tv-spec-reviewer`, Opus) antes do commit; confiança < 75% volta para o tv-architect e < 50% para o Felipe ([D-020](docs/process/decisions.md)).
+Fim de cada slice: gate **SPEC REVIEW** (`tv-spec-reviewer`, Opus) antes do commit; confiança < 90% volta para o tv-architect e < 50% para o Felipe ([D-020](docs/process/decisions.md), [D-057](docs/process/decisions.md)).
 
 ## Regras legais (invioláveis)
 

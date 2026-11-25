@@ -29,7 +29,8 @@ from talentvisor.report import reason_label
 BASE = Path(__file__).parent
 templates = Jinja2Templates(directory=BASE / "templates")  # autoescape on for .html
 
-CONSENT_VERSION = "v1"
+CLOUD_STT = os.environ.get("ALLOW_CLOUD_STT") == "1"  # read at start: the consent must name Groq (L-04, D-035)
+CONSENT_VERSION = "v1-groq" if CLOUD_STT else "v1"
 MAX_BYTES = 300 * 1024 * 1024
 UPLOAD_DIR = Path(os.environ.get("UPLOAD_DIR", "data/uploads"))
 VIDEO_TYPES = {".mp4": "video/mp4", ".webm": "video/webm", ".mov": "video/quicktime"}
@@ -67,6 +68,10 @@ async def http_error(request: Request, exc: StarletteHTTPException):
 
 @app.exception_handler(Exception)
 async def server_error(request: Request, exc: Exception):
+    if request.url.path.startswith("/api/"):  # Langflow gets JSON, never HTML (§7, D-050); no exception text (may carry PII)
+        if isinstance(exc, pipeline.router.NoModelAvailable):
+            return JSONResponse({"detail": "no model available"}, status_code=503)
+        return JSONResponse({"detail": "internal error"}, status_code=500)
     return error_page(request, 500, "Algo deu errado. Tente novamente em instantes.")
 
 
@@ -102,7 +107,7 @@ def health():
 
 @app.get("/")
 def consent(request: Request):
-    return render(request, "consent.html", version=CONSENT_VERSION)
+    return render(request, "consent.html", version=CONSENT_VERSION, cloud_stt=CLOUD_STT)
 
 
 def upload_form(request: Request, status: int = 200, values=None, errors=None):
@@ -382,8 +387,14 @@ async def api_evaluate(request: Request):
     if not isinstance(text, str) or not text.strip():
         return JSONResponse({"detail": "text is required"}, status_code=422)
     form, known = body.get("form") or {}, body.get("known") or {}
+    if not isinstance(form, dict) or not isinstance(known, dict):
+        return JSONResponse({"detail": "form and known must be objects"}, status_code=422)
     result, _, _ = await run_in_threadpool(
         pipeline.evaluate_text, text, [{"start": 0, "end": 0, "text": text}], form, known)
+    with Session(db.engine) as s:  # L-05: every evaluation is audited, also the stateless API one
+        s.add(AuditLog(candidate_id=None, actor="system", action="evaluated_api",
+                       payload_json=json.dumps({"human_review": result["human_review"], "reasons": result["reasons"]})))
+        s.commit()
     return JSONResponse(result)
 
 

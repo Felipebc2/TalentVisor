@@ -56,7 +56,7 @@ flowchart TD
   S8 --> L{última task<br/>da slice?}
   L -- não --> S1
   L -- sim --> R{9 SPEC REVIEW<br/>spec-reviewer + 3 forks}
-  R -- "≥75% PASS" --> C[commit da slice] --> S1
+  R -- "≥90% PASS" --> C[commit da slice] --> S1
   R -- "50–74% REVISE" --> A[architect DECIDE<br/>aplica AÇÕES] --> R
   R -- "<50% HUMAN" --> H[para e pergunta ao Felipe]
 ```
@@ -72,7 +72,7 @@ flowchart TD
 | 6 REVIEW | builder novo / architect | REVIEW-M ou REVIEW-L | APPROVE, CHANGES ou ESCALATE |
 | 7 FIX | builder | aplica os CHANGES; volta ao 5; **limite de 2 voltas** | n/a |
 | 8 CLOSE | runner + orquestrador | `[x]` no [Slices](../plan/slices.md), `graphify update .`; o **orquestrador** faz um commit local (mensagem em inglês, sem co-author, sem push) | task fechada |
-| 9 SPEC REVIEW | tv-spec-reviewer (Opus) | só na **última task da slice**. Dispara os 3 forks com os prompts prontos do agente e sintetiza a visão modesta: `NOTA x/5`, `CONFIANÇA %`, `MOTIVO`, `AÇÕES`, `GATE`. **PASS** (≥ 75%) → commit `docs(spec): review S<n>` se houve ajuste e segue para a próxima slice. **REVISE** (50–74%) → tv-architect DECIDE aplica as AÇÕES e o gate roda de novo (máx. 2 voltas, depois HUMAN). **HUMAN** (< 50%) → para e pergunta ao Felipe ([D-020](decisions.md)) | slice fechada |
+| 9 SPEC REVIEW | tv-spec-reviewer (Opus) | só na **última task da slice**. Dispara os 3 forks com os prompts prontos do agente e sintetiza a visão modesta: `NOTA x/5`, `CONFIANÇA %`, `MOTIVO`, `AÇÕES`, `GATE`. **PASS** (≥ 90%, D-057) → commit `docs(spec): review S<n>` se houve ajuste e segue para a próxima slice. **REVISE** (50–89%) → tv-architect DECIDE aplica as AÇÕES e o gate roda de novo (máx. 2 voltas, depois HUMAN). **HUMAN** (< 50%) → para e pergunta ao Felipe ([D-020](decisions.md)) | slice fechada |
 
 ### Live ops (o que o Felipe vê)
 

@@ -12,8 +12,8 @@ Requirement IDs `REQ-UI-*` complement [SPEC §5.1](spec.md) (F-01, F-02, F-14–
 
 | # | Principle |
 |---|---|
-| P1 | **Server-rendered**: Jinja2 + Pico.css (classless) + HTMX via CDN. No build step and no JS framework. Custom JS is limited to the upload progress bar (≤ 15 lines). |
-| P2 | **Works without JS** for every form (plain POST + redirect); HTMX only enhances (polling, in-place decision). |
+| P1 | **Server-rendered**: Jinja2 + Pico.css (classless) + HTMX via CDN. No build step and no JS framework. Custom JS is only the small inline snippets listed in §5. |
+| P2 | **Works without JS** for every form (plain POST/GET + redirect; the dashboard filter has a "Filtrar" button); HTMX and the inline snippets only enhance. |
 | P3 | **PT-BR copy** everywhere the user reads; identifiers, routes and classes in English. |
 | P4 | **Accessible**: real `<label>` for every input, visible focus, `aria-live="polite"` on status regions, color is never the only signal (badges carry text), contrast AA (Pico default). |
 | P5 | **Responsive**: works at 360 px width; tables scroll horizontally inside `<figure>`; nothing overflows the page. |
@@ -48,13 +48,16 @@ Termo de consentimento
   ▸ O que NÃO analisamos  rosto, voz, emoção, aparência, postura
   ▸ Retenção              vídeo: apagado logo após a transcrição; transcrição: 7 dias;
                           dados da candidatura + avaliação: 30 dias; registros de auditoria: 90 dias
-  ▸ Seus direitos         revisão humana; contestação pelo código (quando disponível)
-  [x] Li e aceito o termo (versão v1)            ← required checkbox
-  [ Continuar ]                                  ← GET /upload?consent=v1
+  ▸ Seus direitos         revisão humana; contestação pelo código em /contest
+  ▸ Quem processa         transcrição local; Groq, Google e Mistral recebem só texto sem dados pessoais
+                          (+ com ALLOW_CLOUD_STT=1: "o áudio do vídeo é enviado à Groq (EUA)")
+  [x] Li e aceito o termo (versão v1)            ← required checkbox (v1-groq with the flag)
+  [ Continuar ]                                  ← GET /upload?consent=<version>
 ```
 
 - **REQ-UI-01:** the checkbox is `required`. Without it, the browser blocks submit (no JS needed).
-- `GET /upload` without `consent=v1` → 303 to `/` with the flash message "Aceite o termo para continuar." `POST /upload` without `consent=v1` → 400 (REQ-F-01, D-023).
+- `GET /upload` without `consent=<version>` → 303 to `/` with the flash message "Aceite o termo para continuar." `POST /upload` without it → 400 (REQ-F-01, D-023).
+- With `ALLOW_CLOUD_STT=1` the version is `v1-groq` and the text names Groq as the external processor of the audio (F-01, D-035).
 
 ### 3.2 `/upload` — Submission (candidate) · REQ-F-02
 
@@ -109,10 +112,10 @@ TV-02BB  ✗ recusado            —   —                        —           
 
 - **REQ-UI-06:** the table body polls `GET /dashboard/rows` every 3 s **only while** some row is processing. When none is, the server answers `286`, which makes HTMX stop polling.
 - **REQ-UI-07:** the review badge shows the text "Revisão obrigatória" plus the reasons in `title` and in a `<details>` on small screens.
-- **REQ-UI-08:** empty state "Nenhuma candidatura ainda." with a link to `/upload`.
-- "✗ recusado" = dataset row not cleared for analysis (F-03): no PII, no [Abrir] (D-047).
+- **REQ-UI-08:** empty states: no candidate at all → "Nenhuma candidatura ainda." with a link to `/upload`; candidates exist but none matches the filter → "Nenhum resultado para o filtro."
+- "✗ recusado" = dataset row not cleared for analysis (F-03): no PII; the action cell shows "—" instead of the "Abrir" link (D-047).
 - No names here. Rows are sorted by "revisão obrigatória" first, then by date desc.
-- **(P1)** below the table, a `<details>` "Métricas" block shows: review rate, "taxa de detecção de injeção" (injection only triggers review), p50 latency per stage (no STT), and kappa once ≥ 3 decisions exist. The kappa cut (`AI_APPROVE_CUT`) is never shown as a recommendation (D-046) ([Métricas](../domain/metrics.md)).
+- **(P1)** below the table, a `<details>` "Métricas" block shows: "Taxa de revisão", "Taxa de detecção de injeção" (injection only triggers review), "Latência p50 por etapa" (no STT), and kappa ("aguardando ≥ 3 decisões" until then). With no evaluation: "Sem avaliações ainda." The kappa cut (`AI_APPROVE_CUT`) is never shown as a recommendation (D-046) ([Métricas](../domain/metrics.md)).
 
 ### 3.6 `/candidate/{id}` — Detail and decision · REQ-F-15
 
@@ -169,7 +172,7 @@ Recomendação gerada por IA. Decisão final é humana. · modelos: … · p. 1/
 - **REQ-UI-15:** the PDF fits on ≤ 2 pages for 5 skills; WeasyPrint `@page` sets the footer and page numbers; no external fetches at render time (CSS inlined).
 
 ### 3.8 Errors
-- **REQ-UI-16:** `404` and `400` use `base.html` with PT-BR messages and a link back. `500` shows a generic message; details only in the logs.
+- **REQ-UI-16:** `404` and `400` use `base.html` with PT-BR messages ("Página não encontrada.", "Requisição inválida.") and a link back. `500` shows "Algo deu errado. Tente novamente em instantes."; details only in the logs. Under `/api/*` every error is JSON `{"detail"}` instead (spec §7).
 
 ## 4. Components (Jinja macros in `templates/_macros.html`)
 
@@ -202,21 +205,37 @@ Reason codes → PT-BR labels (one dict, `REASON_LABELS` in `report.py`, importe
 | Candidate stepper | `every 3s` | `GET /candidate/{id}/status` | `outerHTML`; `HX-Refresh` when done |
 | Decision panel | submit | `POST /candidate/{id}/decision` | success: `HX-Refresh: true` (page reload); 4xx (422/409): `outerHTML` of the panel |
 
-Nothing else uses JS.
+Inline JS outside HTMX (no other script exists):
 
-## 6. Acceptance (manual + `test_app.py`)
+| Where | Snippet | Without JS |
+|---|---|---|
+| `base.html` | `htmx:beforeSwap` listener: swap 4xx responses so re-rendered forms/panels show their errors | full-page POST shows the same re-render |
+| `upload.html` | disables "Enviar" and drives `<progress>` from `htmx:xhr:progress` (UI-03) | plain POST, no progress bar |
+| `submitted.html` | "Copiar" button: `onclick` → `navigator.clipboard.writeText(code)` | the code stays visible to copy by hand |
+| `dashboard.html` | status `<select onchange="this.form.submit()">` | "Filtrar" button submits the GET form |
+
+## 6. Acceptance (tests in `tests/`)
 
 | ID | Given / When / Then | Test |
 |---|---|---|
-| UI-01 | consent unchecked → submit blocked; `GET /upload` without `consent=v1` → 303 to `/` | `test_upload_requires_consent` (GET redirect; the POST → 400 case is `test_upload_without_consent_400`, spec §11) |
-| UI-02 | invalid file → form re-rendered with message, values kept | `test_invalid_extension` |
-| UI-06 | no processing rows → `/dashboard/rows` returns 286 | `test_rows_stop_polling` |
-| UI-09 | processing candidate → stepper fragment; finished → `HX-Refresh` | `test_status_fragment` |
-| UI-12 | reject without comment → 422; with comment → `audit_log(actor=recruiter)`, name revealed; `second_review` hides it again | `test_decision_writes_audit`, `test_name_hidden_again_after_second_review` |
-| UI-14 | PDF in `awaiting_decision`/`second_review` contains "RASCUNHO" and no real name | `test_report.py::test_pdf_draft_watermark`, `::test_no_name_before_decision` |
-| UI-15 | PDF ≤ 2 pages for 5 skills | `test_report.py::test_pages_le_2` |
-| F-17 | contest: empty → 400; unknown code → same 303, nothing written | `test_contest_*` |
-| UI-P5 | 360 px viewport: no horizontal page scroll (manual, browser devtools) | manual |
+| UI-01 | Given `/`, then the checkbox is `required`; given `GET /upload` without `consent=<version>`, then 303 to `/` with the flash | `test_app.py::test_consent_page`, `::test_upload_requires_consent` (POST → 400: `::test_upload_without_consent_400`) |
+| UI-02 | Given an invalid file, then the form re-renders with the message, values kept and `aria-invalid="true"` | `test_app.py::test_invalid_extension` |
+| UI-03 | Given an upload in progress, then "Enviar" is disabled and `<progress>` advances | manual (needs a real browser XHR; TestClient runs no JS) |
+| UI-04 | Given `/upload`, then "Seus dados" has the help text "Usados só para anonimizar o texto; nunca enviados à IA." | manual (static template copy) |
+| UI-05 | Given `/submitted/{code}`, then only the code is shown, never a score; an unknown code → 404 | `test_app.py::test_upload_ok` (200 and 404); no-score: manual (the template receives only `code`) |
+| UI-06 | Given no processing rows, then `/dashboard/rows` returns 286; given one, then 200 and `every 3s` | `test_app.py::test_rows_stop_polling` |
+| UI-07 | Given a review row, then "Revisão obrigatória" + PT-BR reasons | `test_app.py::test_dashboard_filters_and_review` |
+| UI-08 | Given no candidate, then "Nenhuma candidatura ainda."; given a filter with no match, then "Nenhum resultado para o filtro."; given a refused row, then no "Abrir" link | `test_app.py::test_dashboard_has_no_names`, `::test_dashboard_filter_empty_message`, `::test_refused_row_has_no_open_link` |
+| UI-09 | Given a processing candidate, then the stepper fragment with `aria-current="step"`; finished → `HX-Refresh: true` | `test_app.py::test_status_fragment` |
+| UI-10 | Given `status=error`, then "Falha no processamento. Reenvie ou contate o suporte." | `test_app.py::test_detail_error_status` |
+| UI-11 | Given an evaluation, then `<meter>`, `<blockquote>`, `<cite>P01 · 00:12–00:19</cite>`; a null score → "sem evidência suficiente" | `test_app.py::test_detail_renders_skills` |
+| UI-12 | Given reject without comment, then 422; with comment → `audit_log(actor=recruiter)`, `HX-Refresh`, name revealed; a forbidden transition → 409; `second_review` hides the name again | `test_app.py::test_decision_writes_audit`, `::test_name_hidden_again_after_second_review` |
+| UI-13 | Given router_log rows, then "Log do roteador" lists them and fallbacks have `class="fallback"` | `test_app.py::test_detail_shows_router_log` |
+| UI-14 | Given `awaiting_decision`/`second_review`, then the button says "Baixar PDF (rascunho)" and the PDF has "RASCUNHO" and no real name | `test_app.py::test_detail_renders_skills`, `test_report.py::test_pdf_draft_watermark`, `::test_no_name_before_decision` |
+| UI-15 | Given 5 skills, then the PDF has ≤ 2 pages and the footer lists the model versions | `test_report.py::test_pages_le_2`, `::test_footer_lists_model_versions` |
+| UI-16 | Given an unknown HTML route, then 404 page "Página não encontrada."; under `/api/*`, then JSON `{"detail": "Not Found"}` | `test_app.py::test_not_found_html_and_api_json` |
+| F-17 | Given an empty field, then 400; an unknown code → same 303, nothing written; a contest → "contestado" badge and escaped list | `test_app.py::test_contest_requires_fields`, `::test_contest_unknown_code_same_message`, `::test_contest_registers_audit`, `::test_dashboard_shows_contested_badge`, `::test_detail_lists_contests_escaped` |
+| UI-P5 | Given a 360 px viewport, then no horizontal page scroll | manual (browser devtools; layout cannot be measured in TestClient) |
 
 Tasks: [T-04](../plan/slices.md) (3.1–3.3, 3.8, minimal 3.5), [T-14](../plan/slices.md) (3.5, 3.6), [T-15](../plan/slices.md) (3.7), [T-16](../plan/slices.md) (3.4).
 

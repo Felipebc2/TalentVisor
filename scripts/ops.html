@@ -607,7 +607,9 @@ function renderTiles(s){
   const pct = total ? Math.round(done/total*100) : 0;
   const working = s.agents.filter((a)=>a.status==="working").length;
   const passed = s.reviews.filter((r)=>r.pass).length;
-  const avg = s.reviews.length ? (s.reviews.reduce((a,r)=>a+(+r.score||0),0)/s.reviews.length).toFixed(1) : null;
+  const mean = (rs)=>rs.length ? (rs.reduce((a,r)=>a+(+r.score||0),0)/rs.length).toFixed(1) : null;
+  const latest = Object.values(s.reviews.reduce((m,r)=>(m[r.slice] ??= r, m), {}));  // reviews are newest first (D-057)
+  const avg = mean(latest), avgAll = mean(s.reviews);
   const fails = s.events.filter((e)=>e.status==="fail").length;
 
   // eventos por minuto
@@ -643,7 +645,7 @@ function renderTiles(s){
     <section class="card tile" aria-label="Spec review">
       <h2>Spec reviews aprovadas</h2>
       ${s.reviews.length
-        ? `<p class="big">${passed} <small>de ${s.reviews.length}</small></p><p class="sub">nota média <span class="mono">${avg}/5</span> · gate conf. ≥ <span class="mono">${s.gate}%</span></p><div class="viz outcomes">${outcomes}</div>`
+        ? `<p class="big">${passed} <small>de ${s.reviews.length}</small></p><p class="sub">nota atual <span class="mono">${avg}/5</span> (última por slice) · histórico <span class="mono">${avgAll}/5</span> · gate conf. ≥ <span class="mono">${s.gate}%</span></p><div class="viz outcomes">${outcomes}</div>`
         : `<p class="big">0</p><p class="sub">nenhuma revisão ainda · gate conf. ≥ <span class="mono">${s.gate}%</span></p>`}
     </section>
     <section class="card tile" aria-label="Eventos">

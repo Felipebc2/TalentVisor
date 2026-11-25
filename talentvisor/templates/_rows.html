@@ -8,6 +8,6 @@
   <td>{% if r.review %}<mark title="{{ r.reasons | join('; ') }}">⚠ Revisão obrigatória</mark>
     <details><summary>motivos</summary>{{ r.reasons | join("; ") }}</details>{% else %}—{% endif %}</td>
   <td>{{ r.sent }}</td>
-  <td><a href="/candidate/{{ r.id }}">Abrir</a></td>
+  <td>{% if r.status != "refused" %}<a href="/candidate/{{ r.id }}">Abrir</a>{% else %}—{% endif %}</td>
 </tr>
 {% endfor %}

@@ -288,3 +288,81 @@ def test_name_hidden_again_after_second_review(client):
     assert "Maria Silva Souza" in client.get(f"/candidate/{cid}").text
     client.post(f"/candidate/{cid}/decision", data={"decision": "second_review"})
     assert "Maria Silva Souza" not in client.get(f"/candidate/{cid}").text  # D-041
+
+
+def test_api_evaluate_errors_are_json(client, monkeypatch):
+    from talentvisor import app as a
+    from talentvisor import pipeline
+
+    c = TestClient(a.app, raise_server_exceptions=False)
+    body = {"text": "texto de teste " * 5}
+    assert c.post("/api/evaluate", json={**body, "form": "x"}).json() == {"detail": "form and known must be objects"}
+
+    def down(*_a, **_k):
+        raise pipeline.router.NoModelAvailable("all providers down")
+    monkeypatch.setattr(pipeline, "evaluate_text", down)
+    r = c.post("/api/evaluate", json=body)
+    assert r.status_code == 503 and r.json() == {"detail": "no model available"}
+
+    def boom(*_a, **_k):
+        raise RuntimeError("secret Maria Silva Souza")
+    monkeypatch.setattr(pipeline, "evaluate_text", boom)
+    r = c.post("/api/evaluate", json=body)
+    assert r.status_code == 500 and r.json() == {"detail": "internal error"} and "Maria" not in r.text
+
+
+def test_api_evaluate_writes_audit(client, monkeypatch):
+    from talentvisor import db
+
+    monkeypatch.setenv("LLM_MODE", "mock")
+    r = client.post("/api/evaluate", json={"text": "Eu procuraria explicar de forma clara e simples. " * 5})
+    with Session(db.engine) as s:
+        a = s.exec(select(db.AuditLog).where(db.AuditLog.action == "evaluated_api")).one()
+    assert a.actor == "system" and a.candidate_id is None
+    assert json.loads(a.payload_json) == {"human_review": r.json()["human_review"], "reasons": r.json()["reasons"]}
+
+
+def test_consent_names_groq_when_cloud_stt(client, monkeypatch):
+    from talentvisor import app as a
+
+    groq_audio = "o áudio do vídeo é enviado à Groq"
+    html = client.get("/").text
+    assert groq_audio not in html and "/contest" in html and "versão v1" in html
+    monkeypatch.setattr(a, "CLOUD_STT", True)
+    monkeypatch.setattr(a, "CONSENT_VERSION", "v1-groq")
+    html = client.get("/").text
+    assert groq_audio in html and "versão v1-groq" in html
+
+
+def test_refused_row_has_no_open_link(client):
+    cid = seed("refused")
+    html = client.get("/dashboard/rows").text
+    assert "TV-AAAA" in html and f'href="/candidate/{cid}"' not in html
+
+
+def test_not_found_html_and_api_json(client):
+    r = client.get("/nao-existe")
+    assert r.status_code == 404 and "Página não encontrada." in r.text and "<html" in r.text.lower()
+    r = client.get("/api/nao-existe")
+    assert r.status_code == 404 and r.json() == {"detail": "Not Found"}
+
+
+def test_detail_shows_router_log(client):
+    cid = seed()
+    html = client.get(f"/candidate/{cid}").text
+    assert "Log do roteador" in html and "<td>m2</td>" in html and 'class="fallback"' in html
+
+
+def test_upload_required_fields_and_csv_prefill(client):
+    r = post(client, institution="")
+    assert r.status_code == 400 and "Campo obrigatório." in r.text
+    csv = "nome_pseudonimo;formacao_direito;experiencia_resumida\nAna Lima;Direito;Estágio\n".encode()
+    r = client.post("/upload", data={**FORM, "name": "", "education": ""},
+                    files={"video": ("v.mp4", b"fake", "video/mp4"), "csv": ("c.csv", csv, "text/csv")})
+    assert r.status_code == 303  # CSV pre-filled the empty name and education
+
+
+def test_decision_requires_choice(client):
+    cid = seed()
+    r = client.post(f"/candidate/{cid}/decision", data={"comment": "x"})
+    assert r.status_code == 422 and "Escolha uma decisão." in r.text

@@ -24,7 +24,7 @@ AGENTS = {"tv-architect": "opus", "tv-builder": "sonnet", "tv-runner": "haiku", 
           "fork-otimista": "opus", "fork-neutra": "opus", "fork-pessimista": "opus"}
 END = {"ok", "fail", "changes", "approve", "pass", "revise", "human", "done"}
 FAIL = {"fail", "changes", "revise", "human"}
-GATE = 75  # SPEC REVIEW gates on confidence, not on the score (D-020)
+GATE = 90  # SPEC REVIEW gates on confidence, not on the score (D-020, raised in D-057)
 
 
 def log(args):

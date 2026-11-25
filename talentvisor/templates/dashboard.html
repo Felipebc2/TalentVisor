@@ -40,7 +40,7 @@
   {% if metrics.total %}
   <ul>
     <li>Taxa de revisão: {{ "%.0f"|format(metrics.review_rate * 100) }}%</li>
-    <li>Bloqueios de injeção: {{ "%.0f"|format(metrics.injection_rate * 100) }}%</li>
+    <li>Taxa de detecção de injeção: {{ "%.0f"|format(metrics.injection_rate * 100) }}%</li>
     <li>Concordância IA × humano (kappa):
       {% if metrics.kappa is not none %}{{ "%.2f"|format(metrics.kappa) }}{% else %}aguardando ≥ 3 decisões{% endif %}</li>
   </ul>

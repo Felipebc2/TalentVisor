@@ -12,7 +12,9 @@
   <dt>Retenção</dt>
   <dd>O vídeo é apagado logo após a transcrição. A transcrição fica 7 dias; seus dados de candidatura e a avaliação, 30 dias; os registros de auditoria, 90 dias.</dd>
   <dt>Seus direitos</dt>
-  <dd>Toda decisão é tomada por uma pessoa. Você pode pedir revisão humana pelo código da sua candidatura.</dd>
+  <dd>Toda decisão é tomada por uma pessoa. Você pode pedir revisão humana e contestar o resultado pelo código da sua candidatura, em <a href="/contest">/contest</a>.</dd>
+  <dt>Quem processa</dt>
+  <dd>A transcrição roda localmente. Modelos de IA na nuvem (Groq, Google e Mistral, fora do Brasil) recebem só o texto sem seus dados pessoais.{% if cloud_stt %} <strong>Se a transcrição local falhar, o áudio do vídeo é enviado à Groq (EUA) para transcrição.</strong>{% endif %}</dd>
 </dl>
 <form action="/upload" method="get">
   <label><input type="checkbox" name="consent" value="{{ version }}" required> Li e aceito o termo (versão {{ version }})</label>

@@ -144,3 +144,14 @@ def test_error_sets_status(cand, monkeypatch):
         assert c.status == "error" and c.error == "transcribing" and not video.exists() and c.video_path is None
         a = s.exec(select(db.AuditLog).where(db.AuditLog.action == "error")).one()
         assert json.loads(a.payload_json) == {"stage": "transcribing"}
+
+
+def test_no_system_decision_after_run(cand, monkeypatch):
+    """REQ-L-03: the pipeline never writes a decision; only a human actor does."""
+    cid, video = cand
+    monkeypatch.setattr(stt, "transcribe", _fake_stt(video, TEXT))
+    pipeline.run(cid)
+    with Session(db.engine) as s:
+        rows = s.exec(select(db.AuditLog).where(db.AuditLog.actor == "system")).all()
+        assert rows and not {a.action for a in rows} & {"approve", "reject", "second_review"}
+        assert s.get(db.Candidate, cid).status in ("awaiting_decision", "error")

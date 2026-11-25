@@ -108,7 +108,7 @@ def test_invalid_output_escalates(monkeypatch):
 
 def test_e3_short_prefers_m3():
     assert router.route("E3", {"tokens": 500})[0].model == "openai/gpt-oss-20b"
-    assert router.route("E4", {"critical": True})[0].model == "openai/gpt-oss-120b"
+    assert router.route("E4", {})[0].model == "openai/gpt-oss-120b"
 
 
 def test_e4_short_429_on_m4_goes_to_m5(monkeypatch):
@@ -162,3 +162,9 @@ def test_bad_request_no_cooldown(monkeypatch):
 def test_retry_after_missing_uses_minute_bucket():
     assert router._retry_after(rate_limit(**{"x-ratelimit-remaining-req-minute": "0"})) == 30.0  # Mistral
     assert router._retry_after(rate_limit(**{"x-other": "1"})) == 10.0  # Gemini: no header at all
+
+
+def test_5xx_cools_down_and_falls_back(monkeypatch):
+    calls = fake(monkeypatch, {"openai/gpt-oss-120b": api_err(openai.InternalServerError, 503)})
+    router.call("E4", {"tokens": 3000}, [], Out, {})
+    assert calls == ["openai/gpt-oss-120b", "gemini-4-hydrogen"] and "openai/gpt-oss-120b" in router._cooldown

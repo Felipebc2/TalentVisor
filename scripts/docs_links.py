@@ -1,7 +1,7 @@
 """Docs link checker and backlink generator.
 
     python scripts/docs_links.py           # rewrite the "Referenciado por" block of every doc
-    python scripts/docs_links.py --check   # exit 1 on broken links or stale backlinks (used by `make test`)
+    python scripts/docs_links.py --check   # exit 1 on broken links, stale backlinks or SPEC §11 gaps (used by `make test`)
 """
 
 import os
@@ -40,6 +40,30 @@ def block(doc, refs):
     return f"{START}\n---\n**Referenciado por:** {links}\n{END}"
 
 
+def trace():
+    """SPEC §11: every declared REQ has a row; every cited test/script exists (D-057)."""
+    spec = (DOCS / "spec" / "spec.md").read_text()
+    rows = spec[spec.index("## 11. Traceability"):].split("<!-- backlinks")[0]
+    declared = set(re.findall(r"(?:\*\*|\| )REQ-((?:F|NF|L|Q)-\d+)", spec))
+    errors = [f"§11 missing REQ-{r}" for r in sorted(declared) if not re.search(rf"\b{r}\b", rows)]
+    tests = {f.name: set(re.findall(r"^def (test_\w+)", f.read_text(), re.M)) for f in (ROOT / "tests").glob("test_*.py")}
+    for line in rows.splitlines():
+        last = None
+        for span in re.findall(r"`([^`]+)`", line):
+            path, _, name = span.partition("::")
+            if path.endswith(".py"):
+                last = Path(path).name
+                if last not in tests and not (ROOT / path).exists():
+                    errors.append(f"§11 cites missing file {path}")
+            if name.endswith("*"):
+                errors.append(f"§11 uses a wildcard {last}::{name}; list exact tests")
+            elif name:
+                have = tests.get(last, set())
+                if name not in have:
+                    errors.append(f"§11 cites missing test {last}::{name}")
+    return errors
+
+
 def main(check):
     broken, back = [], {}
     for src in [ROOT / "CLAUDE.md", *docs()]:
@@ -64,7 +88,10 @@ def main(check):
     if check:
         for name in stale:
             print(f"stale backlinks: {name} (run scripts/docs_links.py)")
-    return 1 if broken or (check and stale) else 0
+    gaps = trace()
+    for g in gaps:
+        print(g)
+    return 1 if broken or gaps or (check and stale) else 0
 
 
 if __name__ == "__main__":

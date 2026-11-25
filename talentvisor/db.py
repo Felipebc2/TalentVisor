@@ -100,7 +100,7 @@ class AuditLog(SQLModel, table=True):
 
 class LLMCache(SQLModel, table=True):
     __tablename__ = "llm_cache"
-    key: str = Field(primary_key=True)  # sha256(model + prompt)
+    key: str = Field(primary_key=True)  # sha256(model, messages, temperature, seed) (F-08)
     response: str
     ts: datetime = _ts()
 

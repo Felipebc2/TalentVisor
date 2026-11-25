@@ -74,8 +74,8 @@ MOTIVO: <1 frase>
 AÇÕES: até 4 bullets "arquivo §seção | ação"   (vazio se nenhuma)
 GATE: PASS | REVISE | HUMAN
 ```
-- `GATE: PASS` se CONFIANÇA ≥ 75%.
-- `GATE: REVISE` se 50% ≤ CONFIANÇA < 75%: o orquestrador manda as AÇÕES para o tv-architect (Opus, DECIDE), que corrige e volta para nova revisão.
+- `GATE: PASS` se CONFIANÇA ≥ 90% (D-057).
+- `GATE: REVISE` se 50% ≤ CONFIANÇA < 90%: o orquestrador manda as AÇÕES para o tv-architect (Opus, DECIDE), que corrige e volta para nova revisão.
 - `GATE: HUMAN` se CONFIANÇA < 50%: o orquestrador para e pede intervenção do Felipe.
 
 A confiança mede o quanto você confia na **nota** (as 3 visões convergem? você leu o código que a SPEC descreve?), não o quanto a SPEC é boa.
