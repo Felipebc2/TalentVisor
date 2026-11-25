@@ -7,7 +7,7 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 from sqlalchemy import DateTime, TypeDecorator
-from sqlmodel import Field, Session, SQLModel, create_engine, delete, select
+from sqlmodel import Field, Session, SQLModel, create_engine, delete, select, update
 
 DB_URL = os.environ.get("DB_URL", "sqlite:///data/talentvisor.db")
 ORPHAN_HOURS = 6  # uploads older than this never reached the pipeline cleanup
@@ -138,6 +138,9 @@ def purge_expired(now: datetime | None = None) -> dict[str, int]:
                 c.status, c.error = "error", "transcribing"
             s.add(c)
         s.flush()
+        # REQ-L-01: free text (contest, decision comment) must not outlive its candidate
+        gone = select(Candidate.id).where(Candidate.created_at < d(30))
+        s.exec(update(AuditLog).where(AuditLog.candidate_id.in_(gone)).values(payload_json="{}"))
         counts = {m.__tablename__: s.exec(delete(m).where(w)).rowcount for m, w in rules}
         counts["orphan_videos"] = len(orphans)
         s.commit()

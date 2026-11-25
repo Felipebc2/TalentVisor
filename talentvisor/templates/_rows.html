@@ -1,0 +1,13 @@
+{% from "_macros.html" import status_badge %}
+{% for r in rows %}
+<tr>
+  <td><code>{{ r.code }}</code>{% if r.contested %} <mark>contestado</mark>{% endif %}</td>
+  <td>{{ status_badge(r.status) }}</td>
+  <td>{{ r.score if r.score is not none else "—" }}</td>
+  <td>{{ r.category or "—" }}</td>
+  <td>{% if r.review %}<mark title="{{ r.reasons | join('; ') }}">⚠ Revisão obrigatória</mark>
+    <details><summary>motivos</summary>{{ r.reasons | join("; ") }}</details>{% else %}—{% endif %}</td>
+  <td>{{ r.sent }}</td>
+  <td><a href="/candidate/{{ r.id }}">Abrir</a></td>
+</tr>
+{% endfor %}

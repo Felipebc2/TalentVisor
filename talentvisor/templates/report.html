@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<title>Relatório {{ c.code }}</title>
+<style>
+@page { size: A4; margin: 15mm 14mm 20mm;
+  @bottom-left { content: "Recomendação gerada por IA. Decisão final é humana. · modelos: {% for k, v in (r.models or {}).items() %}{{ k }} {{ v }}{{ '; ' if not loop.last }}{% endfor %}"; font: 7pt "DejaVu Sans"; color: #555; }
+  @bottom-right { content: "p. " counter(page) "/" counter(pages); font: 7pt "DejaVu Sans"; color: #555; } }
+body { font: 9pt/1.35 "DejaVu Sans", sans-serif; color: #111; }
+h1 { font-size: 14pt; margin: 0; }
+h2 { font-size: 10pt; margin: 10px 0 4px; border-bottom: 1px solid #999; }
+header { display: flex; justify-content: space-between; align-items: baseline; }
+.wm { position: fixed; top: 40%; left: 0; width: 100%; text-align: center; transform: rotate(-30deg);
+  font-size: 30pt; font-weight: bold; color: rgba(200, 0, 0, .13); z-index: -1; }
+.cat { font-size: 12pt; margin: 8px 0; padding: 6px; background: #eef2ff; }
+table { width: 100%; border-collapse: collapse; }
+td, th { border-bottom: 1px solid #ddd; padding: 3px; text-align: left; vertical-align: top; }
+.bar { display: inline-block; width: 50px; height: 7px; background: #ddd; vertical-align: middle; }
+.bar i { display: block; height: 7px; background: #2b4acb; }
+.ev { max-width: 230px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-style: italic; }
+.cols { display: flex; gap: 16px; } .cols > div { flex: 1; }
+ul { margin: 0; padding-left: 14px; }
+</style>
+</head>
+<body>
+{% if draft %}<div class="wm">RASCUNHO — aguardando decisão humana</div>{% endif %}
+<header><h1>TalentVisor — Relatório de candidatura</h1><span>{{ c.code }} · {{ date }}</span></header>
+{% if show_name %}<p><strong>Candidato:</strong> {{ c.real_name }}</p>{% endif %}
+<div class="cat">Categoria: <strong>{{ r.category }}</strong> &nbsp; Nota geral
+  <strong>{{ r.overall_score if r.overall_score is not none else "—" }}/5</strong></div>
+
+<h2>Soft skills</h2>
+<table>
+<tr><th>Skill</th><th>Nota</th><th>Evidência</th><th>Confiança</th></tr>
+{% for s in r.soft_skills %}
+<tr><td>{{ labels.get(s.skill, s.skill) }}</td>
+  {% if s.score is none %}<td>—</td><td class="ev">sem evidência suficiente</td>
+  {% else %}<td><span class="bar"><i style="width: {{ s.score * 20 }}%"></i></span> {{ s.score }}</td>
+  <td class="ev">“{{ s.evidence }}”</td>{% endif %}
+  <td>{{ "%d%%" | format((s.confidence or 0) * 100) }}</td></tr>
+{% endfor %}
+</table>
+
+<h2>Hard skills</h2>
+<ul>{% for h in r.hard_skills %}<li>{{ h.item }}{% if h.evidence %} — {{ h.evidence }}{% endif %}</li>{% else %}<li>—</li>{% endfor %}</ul>
+<h2>Perfil de trabalho</h2><p>{{ r.work_profile }}</p>
+<h2>Perfil pessoal</h2><p>{{ r.personal_profile }}</p>
+
+<div class="cols">
+<div><h2>Pontos fortes</h2><ul>{% for x in r.strengths %}<li>{{ x }}</li>{% endfor %}</ul></div>
+<div><h2>Pontos de atenção</h2><ul>{% for x in r.concerns %}<li>{{ x }}</li>{% endfor %}</ul></div>
+</div>
+
+<h2>Revisão e decisão</h2>
+<p>Revisão humana: {% if r.human_review %}sim — {{ reasons | join("; ") }}{% else %}não{% endif %}</p>
+<p><strong>Decisão: {{ decision_text }}</strong>{% if d and d.comment %} — “{{ d.comment }}”{% endif %}</p>
+</body>
+</html>

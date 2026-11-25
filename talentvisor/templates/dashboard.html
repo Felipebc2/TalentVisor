@@ -1,20 +1,58 @@
 {% extends "base.html" %}
-{% from "_macros.html" import status_badge %}
 {% block title %}Painel do recrutador · TalentVisor{% endblock %}
 {% block content %}
 <h1>Painel do recrutador</h1>
+<div class="grid" role="group" aria-label="Resumo">
+  <article><small>Total</small><h2>{{ counts.total }}</h2></article>
+  <article><small>Aguardando</small><h2>{{ counts.awaiting }}</h2></article>
+  <article><small>Revisão obrigatória</small><h2>{{ counts.review }}</h2></article>
+  <article><small>Decididos</small><h2>{{ counts.decided }}</h2></article>
+</div>
+<form method="get" action="/dashboard" class="grid">
+  <label>Status
+    <select name="status" onchange="this.form.submit()">
+      <option value="">Todos</option>
+      {% for k, label in {"awaiting_decision": "Aguardando decisão", "approved": "Aprovado", "rejected": "Reprovado",
+        "second_review": "2ª avaliação", "error": "Erro", "refused": "Recusado"}.items() %}
+      <option value="{{ k }}"{% if k == f_status %} selected{% endif %}>{{ label }}</option>
+      {% endfor %}
+    </select>
+  </label>
+  <label><input type="checkbox" name="review" value="1"{% if f_review %} checked{% endif %}> só revisão obrigatória</label>
+  <button type="submit">Filtrar</button>
+</form>
 {% if rows %}
 <figure>
   <table>
-    <thead><tr><th>Código</th><th>Status</th><th>Enviado</th></tr></thead>
-    <tbody>
-    {% for r in rows %}
-      <tr><td><code>{{ r.code }}</code></td><td>{{ status_badge(r.status) }}</td><td>{{ r.sent }}</td></tr>
-    {% endfor %}
+    <thead><tr><th>Código</th><th>Status</th><th>Nota</th><th>Categoria</th><th>Revisão</th><th>Enviado</th><th></th></tr></thead>
+    <tbody{% if polling %} hx-get="/dashboard/rows{{ '?' ~ qs if qs }}" hx-trigger="every 3s" hx-swap="innerHTML"{% endif %}>
+      {% include "_rows.html" %}
     </tbody>
   </table>
 </figure>
+{% elif counts.total %}
+<p>Nenhum resultado para o filtro.</p>
 {% else %}
 <p>Nenhuma candidatura ainda. <a href="/upload">Enviar candidatura</a></p>
 {% endif %}
+<details>
+  <summary>Métricas</summary>
+  {% if metrics.total %}
+  <ul>
+    <li>Taxa de revisão: {{ "%.0f"|format(metrics.review_rate * 100) }}%</li>
+    <li>Bloqueios de injeção: {{ "%.0f"|format(metrics.injection_rate * 100) }}%</li>
+    <li>Concordância IA × humano (kappa):
+      {% if metrics.kappa is not none %}{{ "%.2f"|format(metrics.kappa) }}{% else %}aguardando ≥ 3 decisões{% endif %}</li>
+  </ul>
+  {% if metrics.latency_p50 %}
+  <table>
+    <caption>Latência p50 por etapa</caption>
+    <thead><tr><th>Etapa</th><th>p50 (ms)</th></tr></thead>
+    <tbody>{% for st, v in metrics.latency_p50.items() %}<tr><td>{{ st }}</td><td>{{ "%.0f"|format(v) }}</td></tr>{% endfor %}</tbody>
+  </table>
+  {% endif %}
+  {% else %}
+  <p>Sem avaliações ainda.</p>
+  {% endif %}
+</details>
 {% endblock %}

@@ -1,0 +1,61 @@
+{% extends "base.html" %}
+{% from "_macros.html" import status_badge, review_banner, score_meter, evidence %}
+{% block title %}{{ c.code }} · TalentVisor{% endblock %}
+{% block content %}
+<h1>{{ c.code }}{% if real_name %} · {{ real_name }}{% endif %} · {{ status_badge(c.status) }}
+  {%- if r %} · Nota geral {{ r.overall_score }} · <small>{{ r.category }}</small>{% endif %}</h1>
+{% if processing %}
+  {% include "_status.html" %}
+{% elif c.status == "error" %}
+  <article role="alert">Falha no processamento. Reenvie ou contate o suporte.{% if c.error %} Etapa: {{ STAGES.get(c.error, c.error) }}.{% endif %}</article>
+{% elif r %}
+{{ review_banner(r.reasons if r.human_review else []) }}
+<div class="grid">
+  <div>
+    <h2>Soft skills</h2>
+    {% for s in r.soft_skills %}
+    <article>
+      <header><strong>{{ SKILL_LABELS.get(s.skill, s.skill) }}</strong> {{ score_meter(s.score) }}</header>
+      {% if s.score is not none %}
+      <small>confiança {{ s.confidence }} · auditor {{ s.auditor_score if s.auditor_score is not none else "—" }}</small>
+      {{ evidence(s.evidence, s.question, s.timestamp) }}
+      <p>Justificativa: {{ s.justification }}</p>
+      {% endif %}
+    </article>
+    {% endfor %}
+    <h2>Hard skills</h2>
+    <ul>{% for h in r.hard_skills %}<li>{{ h.item }} ({{ "formulário" if h.source == "form" else "fala" }})</li>{% else %}<li>—</li>{% endfor %}</ul>
+    <h2>Perfil</h2>
+    <p><strong>Trabalho:</strong> {{ r.work_profile }}</p>
+    <p><strong>Pessoal:</strong> {{ r.personal_profile }}</p>
+    <div class="grid">
+      <div><h3>Pontos fortes</h3><ul>{% for x in r.strengths %}<li>{{ x }}</li>{% endfor %}</ul></div>
+      <div><h3>Pontos de atenção</h3><ul>{% for x in r.concerns %}<li>{{ x }}</li>{% endfor %}</ul></div>
+    </div>
+    {% set cons = r.written_vs_spoken_consistency %}
+    <p><strong>Consistência escrita × fala:</strong> {{ {"high": "alta", "medium": "média", "low": "baixa"}.get(cons.level, cons.level) }} — {{ cons.note }}</p>
+  </div>
+  <div>{% include "_decision.html" %}</div>
+</div>
+{% else %}
+<p>Sem avaliação disponível.</p>
+{% endif %}
+{% if contests %}
+<section>
+  <h2>Contestações</h2>
+  <ul>{% for k in contests %}<li><small>{{ k.ts }}</small> {{ k.text }}</li>{% endfor %}</ul>
+</section>
+{% endif %}
+{% if logs %}
+<details>
+  <summary>Log do roteador</summary>
+  <figure><table>
+    <thead><tr><th>Etapa</th><th>Modelo</th><th>Motivo</th><th>Fallback de</th><th>ms</th><th>ok</th><th>Tokens</th></tr></thead>
+    <tbody>{% for l in logs %}
+      <tr{% if l.fallback_from %} class="fallback"{% endif %}><td>{{ l.stage }}</td><td>{{ l.model }}</td><td>{{ l.reason }}</td>
+        <td>{{ l.fallback_from or "—" }}</td><td>{{ l.ms }}</td><td>{{ "sim" if l.ok else "não" }}</td><td>{{ l.tokens }}</td></tr>
+    {% endfor %}</tbody>
+  </table></figure>
+</details>
+{% endif %}
+{% endblock %}

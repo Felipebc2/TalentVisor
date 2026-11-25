@@ -53,7 +53,5 @@
   f.addEventListener("htmx:xhr:progress", (e) => {
     if (e.detail.lengthComputable) bar.value = Math.round((e.detail.loaded / e.detail.total) * 100);
   });
-  // show server-side 400 (form re-rendered with messages)
-  document.body.addEventListener("htmx:beforeSwap", (e) => { e.detail.shouldSwap = true; });
 </script>
 {% endblock %}

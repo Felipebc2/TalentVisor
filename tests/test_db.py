@@ -67,3 +67,17 @@ def test_purge_orphan_videos(db, tmp_path):
         f = s.exec(select(db.Candidate).where(db.Candidate.code == "TV-FRSH")).one()
         assert (o.video_path, o.status, o.error) == (None, "error", "transcribing")
         assert (f.video_path, f.status) == (str(new), "received")
+
+
+def test_purge_redacts_audit_text_of_purged_candidate(db):
+    with Session(db.engine) as s:
+        old = db.Candidate(code="TV-OLD1", created_at=ago(31))
+        new = db.Candidate(code="TV-NEW1", created_at=ago(29))
+        s.add_all([old, new])
+        s.commit()
+        s.add_all([db.AuditLog(candidate_id=old.id, actor="candidate", action="contest", payload_json='{"text": "segredo"}', ts=ago(31)),
+                   db.AuditLog(candidate_id=new.id, actor="candidate", action="contest", payload_json='{"text": "fica"}', ts=ago(29))])
+        s.commit()
+    db.purge_expired(now=NOW)
+    with Session(db.engine) as s:
+        assert sorted(a.payload_json for a in s.exec(select(db.AuditLog))) == ['{"text": "fica"}', "{}"]

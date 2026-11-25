@@ -1,3 +1,5 @@
 .code { font-size: 2rem; font-family: ui-monospace, monospace; }
 progress[hidden] { display: none; }
 figure { overflow-x: auto; }
+tr.fallback td { background: var(--pico-mark-background-color); }
+meter { width: 8rem; vertical-align: middle; }
