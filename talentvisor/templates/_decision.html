@@ -1,6 +1,7 @@
-<section id="decision" aria-live="polite">
+{% from "_macros.html" import ai_notice %}
+<section id="decision" class="panel" aria-live="polite">
   <h2>Decisão</h2>
-  {% if decision %}<p><strong>{{ decision_text }}</strong>{% if decision.comment %}<br><small>Comentário: {{ decision.comment }}</small>{% endif %}</p>{% endif %}
+  {% if decision %}<p class="verdict"><strong>{{ decision_text }}</strong>{% if decision.comment %}<br><small>Comentário: {{ decision.comment }}</small>{% endif %}</p>{% endif %}
   {% if can_decide %}
   <form hx-post="/candidate/{{ c.id }}/decision" hx-target="#decision" hx-swap="outerHTML" method="post" action="/candidate/{{ c.id }}/decision">
     <fieldset>
@@ -11,11 +12,12 @@
       <label><input type="radio" name="decision" value="second_review"{% if only_reopen %} required checked{% endif %}> Segunda avaliação</label>
     </fieldset>
     <label>Comentário
-      <textarea name="comment" rows="3" maxlength="2000"{% if error %} aria-invalid="true" aria-describedby="decision-err"{% endif %}></textarea>
-      {% if error %}<small id="decision-err">{{ error }}</small>{% endif %}
+      <textarea name="comment" rows="3" maxlength="2000" placeholder="Obrigatório para reprovar"{% if error %} aria-invalid="true" aria-describedby="decision-err"{% endif %}></textarea>
+      {% if error %}<small id="decision-err" class="alert" style="display:block">{{ error }}</small>{% endif %}
     </label>
     <button type="submit">Registrar decisão</button>
   </form>
-  {% elif error %}<p role="alert">{{ error }}</p>{% endif %}
+  {% elif error %}<p class="alert" role="alert">{{ error }}</p>{% endif %}
   <a role="button" class="secondary" href="/candidate/{{ c.id }}/report.pdf">{{ "Baixar PDF" if decision and c.status != "second_review" else "Baixar PDF (rascunho)" }}</a>
+  <p class="fine">{{ ai_notice() }}</p>
 </section>

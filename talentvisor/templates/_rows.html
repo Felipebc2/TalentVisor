@@ -1,13 +1,12 @@
 {% from "_macros.html" import status_badge %}
 {% for r in rows %}
 <tr>
-  <td><code>{{ r.code }}</code>{% if r.contested %} <mark>contestado</mark>{% endif %}</td>
+  <td><code>{{ r.code }}</code>{% if r.contested %} <mark class="contest">contestado</mark>{% endif %}</td>
   <td>{{ status_badge(r.status) }}</td>
-  <td>{{ r.score if r.score is not none else "—" }}</td>
+  <td class="num">{{ r.score if r.score is not none else "—" }}</td>
   <td>{{ r.category or "—" }}</td>
-  <td>{% if r.review %}<mark title="{{ r.reasons | join('; ') }}">⚠ Revisão obrigatória</mark>
-    <details><summary>motivos</summary>{{ r.reasons | join("; ") }}</details>{% else %}—{% endif %}</td>
-  <td>{{ r.sent }}</td>
-  <td>{% if r.status != "refused" %}<a href="/candidate/{{ r.id }}">Abrir</a>{% else %}—{% endif %}</td>
+  <td>{% if r.review %}<details><summary><span class="flag" title="{{ r.reasons | join('; ') }}">Revisão obrigatória</span></summary>{{ r.reasons | join("; ") }}</details>{% else %}—{% endif %}</td>
+  <td class="num">{{ r.sent }}</td>
+  <td>{% if r.status != "refused" %}<a class="row-open" href="/candidate/{{ r.id }}">Abrir<svg class="ico" style="width:14px;height:14px"><use href="#i-arrow"/></svg></a>{% else %}—{% endif %}</td>
 </tr>
 {% endfor %}

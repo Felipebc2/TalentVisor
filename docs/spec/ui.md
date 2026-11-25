@@ -16,26 +16,29 @@ Requirement IDs `REQ-UI-*` complement [SPEC §5.1](spec.md) (F-01, F-02, F-14–
 | P2 | **Works without JS** for every form (plain POST/GET + redirect; the dashboard filter has a "Filtrar" button); HTMX and the inline snippets only enhance. |
 | P3 | **PT-BR copy** everywhere the user reads; identifiers, routes and classes in English. |
 | P4 | **Accessible**: real `<label>` for every input, visible focus, `aria-live="polite"` on status regions, color is never the only signal (badges carry text), contrast AA (Pico default). |
-| P5 | **Responsive**: works at 360 px width; tables scroll horizontally inside `<figure>`; nothing overflows the page. |
-| P6 | **Light/dark** from the OS via Pico's automatic theme. |
-| P7 | **Honest UI**: the fixed notice "Recomendação gerada por IA. Decisão final é humana." in the footer of every recruiter page and of the PDF. |
+| P5 | **One viewport on desktop**: at 1440×900 and 1280×800 no page scrolls; long content (table, transcript, skills, router log) scrolls inside its own panel. Below 980 px the layout stacks and the page scrolls; nothing overflows horizontally (checked with Playwright, D-061). |
+| P6 | **Dark scan console** (D-061): near-black ground, red only for live state, review flags and one sweep line; status is never color alone (dot + word). Pico stays as the base for controls, themed by tokens in `static/style.css`. |
+| P7 | **Honest UI**: the fixed notice "Recomendação gerada por IA. Decisão final é humana." on every recruiter page (sidebar and decision panel) and in the PDF. |
 
 ## 2. Layout and navigation
 
+Two worlds share one palette (D-061):
+
 ```text
-┌──────────────────────────────────────────────────────────────┐
-│ TalentVisor        Enviar candidatura   Painel do recrutador │  <header><nav>
-├──────────────────────────────────────────────────────────────┤
-│                                                              │
-│  <main class="container">  page content                      │
-│                                                              │
-├──────────────────────────────────────────────────────────────┤
-│ Recomendação gerada por IA. Decisão final é humana. · LGPD   │  <footer>
-└──────────────────────────────────────────────────────────────┘
+Recruiter (/dashboard, /candidate/*)          Candidate (/, /upload, /submitted, /contest)
+┌────────┬─────────────────────────────┐      ┌──────────────────────────────────────┐
+│ brand  │ page header                 │      │ brand      Enviar · Contestar · Painel│
+│ Painel │ ┌─────────┐┌──────┐┌──────┐ │      ├──────────────────────────────────────┤
+│ Análise│ │ panel   ││panel ││panel │ │      │  centered stage, panels side by side  │
+│        │ │ (scroll)││      ││      │ │      │                                      │
+│ aviso  │ └─────────┘└──────┘└──────┘ │      ├──────────────────────────────────────┤
+│ fixo   │                             │      │ LGPD retention line                   │
+└────────┴─────────────────────────────┘      └──────────────────────────────────────┘
 ```
 
-- `base.html` holds the header, footer, Pico/HTMX `<link>`/`<script>` and a flash-message slot.
-- The recruiter-only footer adds the AI notice; the candidate footer shows retention info.
+- `base.html` picks the world from the path, holds the Pico/HTMX `<link>`/`<script>`, an inline SVG icon set and the flash slot (candidate world).
+- Recruiter: sidebar (Painel, Análise when on a candidate, links to the candidate area) with the fixed AI notice; work area = header + panel grid, one viewport.
+- Candidate: top bar + centered stage + LGPD retention footer.
 
 ## 3. Pages
 
@@ -120,21 +123,17 @@ TV-02BB  ✗ recusado            —   —                        —           
 ### 3.6 `/candidate/{id}` — Detail and decision · REQ-F-15
 
 ```text
-TV-7F3A · aguardando decisão · Nota geral 4.2 · [Comunicador Conciliador]
-┌ ⚠ REVISÃO HUMANA OBRIGATÓRIA ─ divergência em ética; confiança baixa em argumentação ┐
-
-Soft skills                                       │  Decisão
- Comunicação  ████▌ 5   conf 0.85  auditor 4      │  ( ) Aprovar para entrevista
-   "eu procuraria explicar de forma clara…"       │  ( ) Reprovar
-   P01 · 00:12–00:19                               │  ( ) Segunda avaliação
-   Justificativa: propõe linguagem acessível…     │  Comentário [          ]
- Argumentação ...                                  │  [ Registrar decisão ]
-                                                  │
-Hard skills      • Pesquisa jurídica (formulário) │  [ Baixar PDF (rascunho) ]
-Perfil           Trabalho: …   Pessoal: …         │
-Pontos fortes │ Pontos de atenção                 │
-Consistência escrita × fala: alta — …             │
-▸ Log do roteador  (stage · model · reason · fallback · ms · ok)
+[‹ Painel]  TV-7F3A ● aguardando decisão                     ┌ 4.2/5  Nota geral ┐
+            Nome oculto até a decisão (avaliação cega)       └ Comunicador Conc. ┘
+┌ REVISÃO HUMANA OBRIGATÓRIA  divergência em Ética · confiança baixa em …        ┐
+┌ Análise da IA ─────────────┐┌ O que o candidato disse e escreveu ┐┌ Decisão ─────┐
+│ [Soft skills] Perfil e hard ││ [Transcrição] Formulário  Log do   ││ ( ) Aprovar  │
+│ Comunicação ████▌ 5         ││ duração 01:42 · sem fala 4% · …    ││ ( ) Reprovar │
+│ conf 0.85 auditor 4 runs …  ││ Vídeo apagado após a transcrição   ││ ( ) 2ª aval. │
+│ "eu procuraria explicar…"   ││ 00:12  eu procuraria explicar…  ◄──┼┼─ evidência  │
+│ P01 · 00:12–00:19 (link) ───┼┼─►     (linha destacada, :target)  ││ Comentário   │
+│ (scroll interno)            ││ (scroll interno)                   ││ [Registrar]  │
+└─────────────────────────────┘└────────────────────────────────────┘└ [PDF] aviso ─┘
 ```
 
 - **REQ-UI-09 (processing):** while `status ∉ {awaiting_decision, approved, rejected, second_review}`, the page shows a stepper (`received → transcribing → anonymizing → scoring → auditing`) that polls a status fragment every 3 s. When it finishes, the server sends `HX-Refresh: true`, so the whole page reloads.
@@ -150,8 +149,13 @@ Consistência escrita × fala: alta — …             │
   - 4xx swaps the panel (global htmx 4xx swap in `base.html`): rejecting without a comment → 422 "Comentário obrigatório para reprovar."; a transition forbidden by spec §8 → 409 (D-050).
   - After `approved`/`rejected` the real name appears in the header ("TV-7F3A · Jadeh P. P."); it is hidden again in `second_review` (blind re-evaluation, D-041).
   - The panel becomes read-only; only "Segunda avaliação" can reopen it.
-- **Contestações** section: lists the candidate's contests (date + text), when any exist (F-17, D-049).
-- **REQ-UI-13 (router log):** a collapsible table from `router_log` with all fields, fallbacks highlighted.
+- **Contestações** tab in the source panel: lists the candidate's contests (date + text), only when any exist (F-17, D-049).
+- **REQ-UI-17 (source side by side, D-061):** the middle panel shows what the candidate actually said and wrote, next to the AI analysis:
+  - **Transcrição:** the anonymized transcript as timestamped lines (`id="t-<start s>"`), plus duration, audio-quality signal and "Vídeo apagado após a transcrição (LGPD)" with the transcript expiry. The video is never shown: it is deleted after STT (REQ-L-01).
+  - Each evidence timestamp links to its transcript line, which is highlighted (`:target`).
+  - **Formulário:** education, experience, description and the written answers P01–P05, anonymized with the known PII on the fly so the review stays blind until the decision (UI-12).
+  - Without a transcript (expired after 7 d, or API run): "Transcrição indisponível".
+- **REQ-UI-13 (router log):** the "Log do roteador" tab lists `router_log` with all fields, fallbacks highlighted.
 - **REQ-UI-14:** the PDF button says "Baixar PDF (rascunho)" in `awaiting_decision`/`second_review` and "Baixar PDF" in `approved`/`rejected` (D-044).
 
 ### 3.7 PDF — `report.html` (A4, print CSS) · REQ-F-16
@@ -234,6 +238,7 @@ Inline JS outside HTMX (no other script exists):
 | UI-14 | Given `awaiting_decision`/`second_review`, then the button says "Baixar PDF (rascunho)" and the PDF has "RASCUNHO" and no real name | `test_app.py::test_detail_renders_skills`, `test_report.py::test_pdf_draft_watermark`, `::test_no_name_before_decision` |
 | UI-15 | Given 5 skills, then the PDF has ≤ 2 pages and the footer lists the model versions | `test_report.py::test_pages_le_2`, `::test_footer_lists_model_versions` |
 | UI-16 | Given an unknown HTML route, then 404 page "Página não encontrada."; under `/api/*`, then JSON `{"detail": "Not Found"}` | `test_app.py::test_not_found_html_and_api_json` |
+| UI-17 | Given a transcript and a form, then the detail shows timestamped lines (`id="t-12"`), the evidence links to them (`href="#t-12"`), the deleted-video note, the anonymized written answers and no real name before the decision; no `<video>` | `test_app.py::test_detail_shows_source_side_by_side` |
 | Contest ([SPEC §5.1](spec.md), REQ-F-17) | Given an empty field, then 400; an unknown code → same 303, nothing written; a contest → "contestado" badge and escaped list | `test_app.py::test_contest_requires_fields`, `::test_contest_unknown_code_same_message`, `::test_contest_registers_audit`, `::test_dashboard_shows_contested_badge`, `::test_detail_lists_contests_escaped` |
 | UI-P5 | Given a 360 px viewport, then no horizontal page scroll | manual (browser devtools; layout cannot be measured in TestClient) |
 

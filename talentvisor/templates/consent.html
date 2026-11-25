@@ -1,23 +1,26 @@
 {% extends "base.html" %}
 {% block title %}Termo de consentimento · TalentVisor{% endblock %}
 {% block content %}
-<h1>Termo de consentimento</h1>
-<dl>
-  <dt>Finalidade</dt>
-  <dd>Apoiar uma pessoa recrutadora na avaliação de competências comportamentais a partir das suas respostas em vídeo. A decisão final é sempre humana.</dd>
-  <dt>O que analisamos</dt>
-  <dd>O conteúdo verbal das respostas (o que você diz).</dd>
-  <dt>O que NÃO analisamos</dt>
-  <dd>Rosto, voz, emoção, aparência e postura.</dd>
-  <dt>Retenção</dt>
-  <dd>O vídeo é apagado logo após a transcrição. A transcrição fica 7 dias; seus dados de candidatura e a avaliação, 30 dias; os registros de auditoria, 90 dias.</dd>
-  <dt>Seus direitos</dt>
-  <dd>Toda decisão é tomada por uma pessoa. Você pode pedir revisão humana e contestar o resultado pelo código da sua candidatura, em <a href="/contest">/contest</a>.</dd>
-  <dt>Quem processa</dt>
-  <dd>A transcrição roda localmente. Modelos de IA na nuvem (Groq, Google e Mistral, fora do Brasil) recebem só o texto, anonimizado automaticamente antes do envio (melhor esforço: algum dado pessoal pode escapar), e planos gratuitos podem usar esses textos para melhorar os modelos.{% if cloud_stt %} <strong>Se a transcrição local falhar, o áudio do vídeo é enviado à Groq (EUA) para transcrição.</strong>{% endif %}</dd>
-</dl>
-<form action="/upload" method="get">
-  <label><input type="checkbox" name="consent" value="{{ version }}" required> Li e aceito o termo (versão {{ version }})</label>
-  <button type="submit">Continuar</button>
-</form>
+<header>
+  <h1>Termo de consentimento</h1>
+  <p>Leia antes de enviar sua candidatura a Advogado(a) Júnior.</p>
+</header>
+<section class="panel">
+  <dl class="term">
+    <div><dt>Finalidade</dt>
+      <dd>Apoiar uma pessoa recrutadora na avaliação de competências comportamentais a partir das suas respostas em vídeo. A decisão final é sempre humana.</dd></div>
+    <div><dt>O que analisamos</dt><dd>O conteúdo verbal das respostas (o que você diz).</dd></div>
+    <div><dt>O que NÃO analisamos</dt><dd>Rosto, voz, emoção, aparência e postura.</dd></div>
+    <div><dt>Retenção</dt>
+      <dd>O vídeo é apagado logo após a transcrição. A transcrição fica 7 dias; seus dados de candidatura e a avaliação, 30 dias; os registros de auditoria, 90 dias.</dd></div>
+    <div><dt>Seus direitos</dt>
+      <dd>Toda decisão é tomada por uma pessoa. Você pode pedir revisão humana e contestar o resultado pelo código da sua candidatura, em <a href="/contest">/contest</a>.</dd></div>
+    <div><dt>Quem processa</dt>
+      <dd>A transcrição roda localmente. Modelos de IA na nuvem (Groq, Google e Mistral, fora do Brasil) recebem só o texto, anonimizado automaticamente antes do envio (melhor esforço: algum dado pessoal pode escapar), e planos gratuitos podem usar esses textos para melhorar os modelos.{% if cloud_stt %} <strong>Se a transcrição local falhar, o áudio do vídeo é enviado à Groq (EUA) para transcrição.</strong>{% endif %}</dd></div>
+  </dl>
+  <form action="/upload" method="get" class="accept">
+    <label><input type="checkbox" name="consent" value="{{ version }}" required> Li e aceito o termo (versão {{ version }})</label>
+    <button type="submit">Continuar</button>
+  </form>
+</section>
 {% endblock %}

@@ -2,60 +2,118 @@
 {% from "_macros.html" import status_badge, review_banner, score_meter, evidence %}
 {% block title %}{{ c.code }} · TalentVisor{% endblock %}
 {% block content %}
-<h1>{{ c.code }}{% if real_name %} · {{ real_name }}{% endif %} · {{ status_badge(c.status) }}
-  {%- if r %} · Nota geral {{ r.overall_score }} · <small>{{ r.category }}</small>{% endif %}</h1>
-{% if processing %}
-  {% include "_status.html" %}
-{% elif c.status == "error" %}
-  <article role="alert">Falha no processamento. Reenvie ou contate o suporte.{% if c.error %} Etapa: {{ STAGES.get(c.error, c.error) }}.{% endif %}</article>
-{% elif r %}
-{{ review_banner(r.reasons if r.human_review else []) }}
-<div class="grid">
+<header class="dossier-head">
+  <a class="row-open" href="/dashboard" aria-label="Voltar ao painel"><svg class="ico" style="width:14px;height:14px"><use href="#i-back"/></svg>Painel</a>
   <div>
-    <h2>Soft skills</h2>
-    {% for s in r.soft_skills %}
-    <article>
-      <header><strong>{{ SKILL_LABELS.get(s.skill, s.skill) }}</strong> {{ score_meter(s.score) }}</header>
-      {% if s.score is not none %}
-      <small>confiança {{ s.confidence }} · auditor {{ s.auditor_score if s.auditor_score is not none else "—" }}</small>
-      {{ evidence(s.evidence, s.question, s.timestamp) }}
-      <p>Justificativa: {{ s.justification }}</p>
-      {% endif %}
-    </article>
-    {% endfor %}
-    <h2>Hard skills</h2>
-    <ul>{% for h in r.hard_skills %}<li>{{ h.item }} ({{ "formulário" if h.source == "form" else "fala" }})</li>{% else %}<li>—</li>{% endfor %}</ul>
-    <h2>Perfil</h2>
-    <p><strong>Trabalho:</strong> {{ r.work_profile }}</p>
-    <p><strong>Pessoal:</strong> {{ r.personal_profile }}</p>
-    <div class="grid">
-      <div><h3>Pontos fortes</h3><ul>{% for x in r.strengths %}<li>{{ x }}</li>{% endfor %}</ul></div>
-      <div><h3>Pontos de atenção</h3><ul>{% for x in r.concerns %}<li>{{ x }}</li>{% endfor %}</ul></div>
-    </div>
-    {% set cons = r.written_vs_spoken_consistency %}
-    <p><strong>Consistência escrita × fala:</strong> {{ {"high": "alta", "medium": "média", "low": "baixa"}.get(cons.level, cons.level) }} — {{ cons.note }}</p>
+    <h1><span class="mono">{{ c.code }}</span>{{ status_badge(c.status) }}</h1>
+    <p class="who">{% if real_name %}<svg class="ico" style="width:14px;height:14px;vertical-align:-2px"><use href="#i-user"/></svg> {{ real_name }}{% else %}Nome oculto até a decisão (avaliação cega){% endif %}</p>
   </div>
-  <div>{% include "_decision.html" %}</div>
+  {% if r %}
+  <div class="overall" aria-label="Nota geral">
+    <b>{{ r.overall_score if r.overall_score is not none else "—" }}<small>/5</small></b>
+    <div><span>Nota geral</span><br><em>{{ r.category }}</em></div>
+  </div>
+  {% endif %}
+</header>
+
+{% if processing %}
+<div class="dossier">
+  <div></div>
+  <section class="panel">{% include "_status.html" %}</section>
+</div>
+{% elif c.status == "error" %}
+<div class="dossier">
+  <div></div>
+  <section class="panel"><p class="alert" role="alert">Falha no processamento. Reenvie ou contate o suporte.{% if c.error %} Etapa: {{ STAGES.get(c.error, c.error) }}.{% endif %}</p></section>
+</div>
+{% elif r %}
+<div class="dossier">
+  {% if r.human_review %}{{ review_banner(r.reasons) }}{% else %}<div></div>{% endif %}
+  <div class="dossier-grid">
+
+    <section class="panel tabs" aria-label="Análise da IA">
+      <input type="radio" name="ana" id="t1" checked><input type="radio" name="ana" id="t2">
+      <div class="tabbar" role="presentation"><label for="t1">Soft skills</label><label for="t2">Perfil e hard skills</label></div>
+      <div class="pane p1">
+        {% for s in r.soft_skills %}
+        <article class="skill">
+          <div class="skill-head"><strong>{{ SKILL_LABELS.get(s.skill, s.skill) }}</strong>{{ score_meter(s.score) }}</div>
+          {% if s.score is not none %}
+          <p class="skill-meta"><span{% if s.confidence < 0.7 %} class="warn"{% endif %}>confiança {{ s.confidence }}</span>
+            <span>auditor {{ s.auditor_score if s.auditor_score is not none else "—" }}</span>
+            {% if s.run_scores %}<span>runs {{ s.run_scores | join(" · ") }}</span>{% endif %}</p>
+          {{ evidence(s.evidence, s.question, s.timestamp) }}
+          <p class="just">Justificativa: {{ s.justification }}</p>
+          {% endif %}
+        </article>
+        {% endfor %}
+      </div>
+      <div class="pane p2 profile">
+        <h3>Hard skills</h3>
+        <ul class="chips">{% for h in r.hard_skills %}<li>{{ h.item }} <small>{{ "formulário" if h.source == "form" else "fala" }}</small></li>{% else %}<li>—</li>{% endfor %}</ul>
+        <h3>Perfil</h3>
+        <p><strong>Trabalho:</strong> {{ r.work_profile }}</p>
+        <p><strong>Pessoal:</strong> {{ r.personal_profile }}</p>
+        <p><strong>Categoria:</strong> {{ r.category }} — {{ r.category_rationale }}</p>
+        <div class="twocol">
+          <div><h3>Pontos fortes</h3><ul>{% for x in r.strengths %}<li>{{ x }}</li>{% endfor %}</ul></div>
+          <div><h3>Pontos de atenção</h3><ul>{% for x in r.concerns %}<li>{{ x }}</li>{% endfor %}</ul></div>
+        </div>
+        {% set cons = r.written_vs_spoken_consistency %}
+        <p><strong>Consistência escrita × fala:</strong> {{ {"high": "alta", "medium": "média", "low": "baixa"}.get(cons.level, cons.level) }} — {{ cons.note }}</p>
+      </div>
+    </section>
+
+    <section class="panel tabs" aria-label="O que o candidato disse e escreveu">
+      <input type="radio" name="src" id="s1" checked><input type="radio" name="src" id="s2"><input type="radio" name="src" id="s3">
+      {% if contests %}<input type="radio" name="src" id="s4">{% endif %}
+      <div class="tabbar" role="presentation">
+        <label for="s1">Transcrição</label><label for="s2">Formulário</label><label for="s3">Log do roteador</label>
+        {% if contests %}<label for="s4">Contestações</label>{% endif %}
+      </div>
+      <div class="pane q1">
+        <div class="source-meta">
+          <span>duração<b>{{ source.duration | mmss if source.duration else "—" }}</b></span>
+          <span>sem fala (média)<b>{{ "%.0f%%"|format(source.quality.no_speech_prob * 100) if source.quality.no_speech_prob is defined else "—" }}</b></span>
+          <span>trechos inaudíveis<b>{{ "%.0f%%"|format(source.quality.pct_inaudible * 100) if source.quality.pct_inaudible is defined else "—" }}</b></span>
+          <span class="gone"><svg class="ico" style="width:13px;height:13px;vertical-align:-2px"><use href="#i-film"/></svg> Vídeo apagado após a transcrição (LGPD).{% if source.expires_at %} Transcrição anonimizada disponível até {{ source.expires_at }}.{% endif %}</span>
+        </div>
+        {% if source.segments %}
+        <ol class="segs">{% for seg in source.segments %}<li id="t-{{ seg.start | int }}"><time>{{ seg.start | mmss }}</time><span>{{ seg.text }}</span></li>{% endfor %}</ol>
+        {% else %}<p class="empty">Transcrição indisponível (expirou após 7 dias ou veio da API).</p>{% endif %}
+      </div>
+      <div class="pane q2">
+        <dl class="qa">
+          {% for k, label in {"education": "Formação", "experience": "Experiência", "description": "Descrição livre"}.items() %}
+          <dt>{{ label }}</dt><dd{% if not source.form[k] %} class="none"{% endif %}>{{ source.form[k] or "não informado" }}</dd>
+          {% endfor %}
+          {% for q, text in QUESTIONS.items() %}
+          <dt>{{ q }} · {{ text }}</dt><dd{% if not source.answers[q] %} class="none"{% endif %}>{{ source.answers[q] or "sem resposta escrita" }}</dd>
+          {% endfor %}
+        </dl>
+      </div>
+      <div class="pane q3">
+        {% if logs %}
+        <table class="logtable">
+          <thead><tr><th>Etapa</th><th>Modelo</th><th>Motivo</th><th>Fallback de</th><th>ms</th><th>ok</th><th>Tokens</th></tr></thead>
+          <tbody>{% for l in logs %}
+            <tr{% if l.fallback_from %} class="fallback"{% endif %}><td>{{ l.stage }}</td><td>{{ l.model }}</td><td>{{ l.reason }}</td>
+              <td>{{ l.fallback_from or "—" }}</td><td class="num">{{ l.ms }}</td><td>{{ "sim" if l.ok else "não" }}</td><td class="num">{{ l.tokens }}</td></tr>
+          {% endfor %}</tbody>
+        </table>
+        {% else %}<p class="empty">Sem chamadas registradas.</p>{% endif %}
+      </div>
+      {% if contests %}
+      <div class="pane q4">
+        <ul class="contests">{% for k in contests %}<li><small class="mono">{{ k.ts }}</small> {{ k.text }}</li>{% endfor %}</ul>
+      </div>
+      {% endif %}
+    </section>
+
+    {% include "_decision.html" %}
+  </div>
 </div>
 {% else %}
-<p>Sem avaliação disponível.</p>
-{% endif %}
-{% if contests %}
-<section>
-  <h2>Contestações</h2>
-  <ul>{% for k in contests %}<li><small>{{ k.ts }}</small> {{ k.text }}</li>{% endfor %}</ul>
-</section>
-{% endif %}
-{% if logs %}
-<details>
-  <summary>Log do roteador</summary>
-  <figure><table>
-    <thead><tr><th>Etapa</th><th>Modelo</th><th>Motivo</th><th>Fallback de</th><th>ms</th><th>ok</th><th>Tokens</th></tr></thead>
-    <tbody>{% for l in logs %}
-      <tr{% if l.fallback_from %} class="fallback"{% endif %}><td>{{ l.stage }}</td><td>{{ l.model }}</td><td>{{ l.reason }}</td>
-        <td>{{ l.fallback_from or "—" }}</td><td>{{ l.ms }}</td><td>{{ "sim" if l.ok else "não" }}</td><td>{{ l.tokens }}</td></tr>
-    {% endfor %}</tbody>
-  </table></figure>
-</details>
+<div class="dossier"><div></div><section class="panel"><p class="empty">Sem avaliação disponível.</p></section></div>
 {% endif %}
 {% endblock %}

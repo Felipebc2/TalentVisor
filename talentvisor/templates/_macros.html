@@ -1,29 +1,30 @@
 {% macro status_badge(status) %}
 {%- set m = {
-  "received": "◌ recebido", "transcribing": "◌ transcrevendo…", "anonymizing": "◌ anonimizando…",
-  "scoring": "◌ avaliando…", "auditing": "◌ auditando…", "awaiting_decision": "● aguardando decisão",
-  "approved": "✓ aprovado", "rejected": "✗ reprovado", "refused": "✗ recusado",
-  "second_review": "↺ 2ª avaliação", "error": "! erro"} -%}
-<mark>{{ m.get(status, "◌ " ~ status) }}</mark>
+  "received": "recebido", "transcribing": "transcrevendo…", "anonymizing": "anonimizando…",
+  "scoring": "avaliando…", "auditing": "auditando…", "awaiting_decision": "aguardando decisão",
+  "approved": "aprovado", "rejected": "reprovado", "refused": "recusado",
+  "second_review": "2ª avaliação", "error": "erro"} -%}
+<span class="badge {{ status }}{% if status in PROCESSING %} processing{% endif %}">{{ m.get(status, status) }}</span>
 {%- endmacro %}
 
 {% macro ai_notice() %}Recomendação gerada por IA. Decisão final é humana.{% endmacro %}
 
 {% macro review_banner(reasons) %}
-{%- if reasons %}<article role="alert"><strong>REVISÃO HUMANA OBRIGATÓRIA</strong> — {{ reasons | reasons | join("; ") }}</article>{% endif -%}
+{%- if reasons %}<p class="review-strip" role="alert"><strong>REVISÃO HUMANA OBRIGATÓRIA</strong> {{ reasons | reasons | join(" · ") }}</p>{% endif -%}
 {% endmacro %}
 
 {% macro score_meter(score) %}
-{%- if score is none %}<em>sem evidência suficiente</em>
-{%- else %}<meter min="1" max="5" value="{{ score }}">{{ score }}</meter> <strong>{{ score }}</strong>{% endif -%}
+{%- if score is none %}<em>sem evidência suficiente</em><span class="score">—</span>
+{%- else %}<meter min="1" max="5" value="{{ score }}">{{ score }}</meter><span class="score">{{ score }}</span>{% endif -%}
 {% endmacro %}
 
 {% macro evidence(quote, question, ts) %}
-<blockquote>“{{ quote }}”<footer><cite>{{ question }}{% if ts %} · {{ ts[0] | mmss }}–{{ ts[1] | mmss }}{% endif %}</cite></footer></blockquote>
+<blockquote>“{{ quote }}”<footer>{% if ts %}<a href="#t-{{ ts[0] | int }}" title="Ver na transcrição">{% endif %}<cite>{{ question }}{% if ts %} · {{ ts[0] | mmss }}–{{ ts[1] | mmss }}{% endif %}</cite>{% if ts %}</a>{% endif %}</footer></blockquote>
 {% endmacro %}
 
 {% macro stepper(status) %}
-<ol aria-label="Etapas do processamento">
-{%- for k, label in STAGES.items() %}<li{% if k == status %} aria-current="step"{% endif %}>{% if k == status %}<strong>{{ label }}</strong>{% else %}{{ label }}{% endif %}</li>{% endfor -%}
+{%- set ks = STAGES.keys() | list %}{% set cur = ks.index(status) if status in ks else -1 %}
+<ol class="steps" aria-label="Etapas do processamento">
+{%- for k, label in STAGES.items() %}<li{% if k == status %} aria-current="step"{% elif loop.index0 < cur %} class="done"{% endif %}>{% if k == status %}<strong>{{ label }}</strong>{% else %}{{ label }}{% endif %}</li>{% endfor -%}
 </ol>
 {% endmacro %}

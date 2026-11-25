@@ -1,5 +1,6 @@
 {% from "_macros.html" import stepper, status_badge %}
 <div id="progress" aria-live="polite"{% if c.status in PROCESSING %} hx-get="/candidate/{{ c.id }}/status" hx-trigger="every 3s" hx-swap="outerHTML"{% endif %}>
-  {{ status_badge(c.status) }}
+  <h2>Processando {{ status_badge(c.status) }}</h2>
   {{ stepper(c.status) }}
+  <p class="muted">O vídeo é apagado assim que a transcrição termina. Esta tela atualiza sozinha.</p>
 </div>

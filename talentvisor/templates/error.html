@@ -1,7 +1,10 @@
 {% extends "base.html" %}
 {% block title %}Erro {{ status_code }} · TalentVisor{% endblock %}
 {% block content %}
-<h1>Erro {{ status_code }}</h1>
-<p>{{ message }}</p>
-<p><a href="/">Voltar ao início</a></p>
+{% if request.url.path.startswith("/dashboard") or request.url.path.startswith("/candidate") %}<header><h1>Erro {{ status_code }}</h1></header>{% endif %}
+<section class="panel narrow">
+  {% if not (request.url.path.startswith("/dashboard") or request.url.path.startswith("/candidate")) %}<h1 class="mono">Erro {{ status_code }}</h1>{% endif %}
+  <p>{{ message }}</p>
+  <p><a href="/">Voltar ao início</a></p>
+</section>
 {% endblock %}

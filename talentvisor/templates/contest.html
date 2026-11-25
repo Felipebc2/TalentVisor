@@ -3,15 +3,19 @@
 {% macro err(k) %}{% if errors.get(k) %}<small id="e-{{ k }}" role="alert">{{ errors[k] }}</small>{% endif %}{% endmacro %}
 {% macro bad(k) %}{% if errors.get(k) %}aria-invalid="true" aria-describedby="e-{{ k }}"{% endif %}{% endmacro %}
 {% block content %}
-<h1>Contestar resultado</h1>
-<p>Informe o código da sua candidatura e explique o motivo. Uma pessoa vai revisar.</p>
-<form method="post" action="/contest">
-  <label>Código da candidatura *
-    <input name="code" value="{{ v.get('code', '') }}" placeholder="TV-XXXX" required {{ bad("code") }}>
-  </label>{{ err("code") }}
-  <label>Sua contestação *
-    <textarea name="text" maxlength="2000" required {{ bad("text") }}>{{ v.get('text', '') }}</textarea>
-  </label>{{ err("text") }}
-  <button type="submit">Enviar contestação</button>
-</form>
+<header>
+  <h1>Contestar resultado</h1>
+  <p>Informe o código da sua candidatura e explique o motivo. Uma pessoa vai revisar.</p>
+</header>
+<section class="panel narrow fields" style="display:block">
+  <form method="post" action="/contest">
+    <label>Código da candidatura *
+      <input name="code" value="{{ v.get('code', '') }}" placeholder="TV-XXXX" required class="mono" {{ bad("code") }}>
+    </label>{{ err("code") }}
+    <label>Sua contestação *
+      <textarea name="text" maxlength="2000" required {{ bad("text") }}>{{ v.get('text', '') }}</textarea>
+    </label>{{ err("text") }}
+    <button type="submit">Enviar contestação</button>
+  </form>
+</section>
 {% endblock %}

@@ -3,53 +3,64 @@
 {% macro err(k) %}{% if errors.get(k) %}<small id="e-{{ k }}" role="alert">{{ errors[k] }}</small>{% endif %}{% endmacro %}
 {% macro bad(k) %}{% if errors.get(k) %}aria-invalid="true" aria-describedby="e-{{ k }}"{% endif %}{% endmacro %}
 {% block content %}
-<h1>Enviar candidatura</h1>
-<h2>Perguntas</h2>
-<p>Responda todas em um único vídeo, até 10 min.</p>
-<ol>{% for code, text in questions %}<li>{{ text }}</li>{% endfor %}</ol>
-
-<form id="up" method="post" action="/upload" enctype="multipart/form-data"
+<header>
+  <h1>Enviar candidatura</h1>
+  <p>Dois passos: seus dados à esquerda, o vídeo da entrevista à direita. Campos com * são obrigatórios.</p>
+</header>
+<form id="up" class="split" method="post" action="/upload" enctype="multipart/form-data"
       hx-post="/upload" hx-encoding="multipart/form-data" hx-target="body" hx-swap="innerHTML" hx-push-url="true">
   <input type="hidden" name="consent" value="{{ version }}">
-  <label>Vídeo *
-    <input type="file" name="video" accept=".mp4,.webm,.mov" required {{ bad("video") }}>
-    <small>mp4/webm/mov · até 300 MB</small>
-  </label>{{ err("video") }}
 
-  <fieldset>
-    <legend>Seus dados *</legend>
-    <label>Nome completo <input name="name" value="{{ v.get('name', '') }}" required {{ bad("name") }}></label>{{ err("name") }}
-    <label>Instituição <input name="institution" value="{{ v.get('institution', '') }}" required {{ bad("institution") }}></label>{{ err("institution") }}
-    <label>Cidade <input name="city" value="{{ v.get('city', '') }}" required {{ bad("city") }}></label>{{ err("city") }}
-    <small>Usados só para anonimizar o texto; nunca enviados à IA.</small>
-  </fieldset>
+  <section class="panel" aria-labelledby="h-form">
+    <h2 id="h-form"><svg class="ico"><use href="#i-user"/></svg>Seus dados</h2>
+    <div class="fields">
+      <fieldset>
+        <legend hidden>Seus dados *</legend>
+        <label class="wide">Nome completo * <input name="name" value="{{ v.get('name', '') }}" required {{ bad("name") }}></label>{{ err("name") }}
+        <label>Instituição * <input name="institution" value="{{ v.get('institution', '') }}" required {{ bad("institution") }}></label>{{ err("institution") }}
+        <label>Cidade * <input name="city" value="{{ v.get('city', '') }}" required {{ bad("city") }}></label>{{ err("city") }}
+      </fieldset>
+      <p class="hint wide">Usados só para anonimizar o texto; nunca enviados à IA.</p>
+      <label class="wide">Formação *
+        <input name="education" value="{{ v.get('education', '') }}" required {{ bad("education") }}>
+      </label>{{ err("education") }}
+      <label>Experiência <textarea name="experience">{{ v.get('experience', '') }}</textarea></label>
+      <label>Descrição livre
+        <textarea name="description" placeholder="Conte algo sobre você">{{ v.get('description', '') }}</textarea>
+      </label>
+      <details class="written wide">
+        <summary>Respostas escritas (opcional)</summary>
+        {% for code, text in questions %}
+        <label>{{ code }} · {{ text }} <textarea name="{{ code }}" aria-label="Resposta escrita {{ code }}">{{ v.get(code, '') }}</textarea></label>
+        {% endfor %}
+      </details>
+    </div>
+  </section>
 
-  <label>Formação *
-    <input name="education" value="{{ v.get('education', '') }}" required {{ bad("education") }}>
-  </label>{{ err("education") }}
-  <label>Experiência <textarea name="experience">{{ v.get('experience', '') }}</textarea></label>
-  <label>Descrição livre
-    <textarea name="description" placeholder="Conte algo sobre você">{{ v.get('description', '') }}</textarea>
-  </label>
-
-  <details>
-    <summary>Respostas escritas (opcional)</summary>
-    {% for code, text in questions %}
-    <label>{{ code }} <textarea name="{{ code }}" aria-label="Resposta escrita {{ code }}">{{ v.get(code, '') }}</textarea></label>
-    {% endfor %}
-  </details>
-
-  <label>Ou importe um CSV (opcional)
-    <input type="file" name="csv" accept=".csv">
-    <small>Uma linha, separador ';'.</small>
-  </label>
-
-  <button type="submit" id="send">Enviar</button>
-  <progress id="bar" value="0" max="100" hidden></progress>
+  <section class="panel upload" aria-labelledby="h-video">
+    <h2 id="h-video"><svg class="ico"><use href="#i-film"/></svg>Vídeo da entrevista</h2>
+    <p class="hint">Responda as 5 perguntas em um único vídeo, até 10 min.</p>
+    <ol class="questions">{% for code, text in questions %}<li>{{ text }}</li>{% endfor %}</ol>
+    <label class="drop">
+      <svg class="ico"><use href="#i-upload"/></svg>
+      <b>Vídeo *</b>
+      <small>mp4/webm/mov · até 300 MB · apagado logo após a transcrição</small>
+      <span class="picked" id="picked" hidden></span>
+      <input type="file" name="video" accept=".mp4,.webm,.mov" required {{ bad("video") }}>
+    </label>{{ err("video") }}
+    <label class="csv">Ou importe um CSV com seus dados (opcional)
+      <input type="file" name="csv" accept=".csv">
+    </label>
+    <p class="hint">Uma linha, separador ';'. Preenche só os campos vazios.</p>
+    <button type="submit" id="send">Enviar</button>
+    <progress id="bar" value="0" max="100" hidden></progress>
+  </section>
 </form>
 <script>
   const f = document.getElementById("up"), bar = document.getElementById("bar"), btn = document.getElementById("send");
-  f.addEventListener("htmx:beforeRequest", () => { btn.disabled = true; bar.hidden = false; });
+  const vid = f.querySelector('input[name="video"]'), picked = document.getElementById("picked");
+  vid.addEventListener("change", () => { picked.hidden = !vid.files.length; picked.textContent = vid.files.length ? vid.files[0].name : ""; });
+  f.addEventListener("htmx:beforeRequest", () => { btn.disabled = true; btn.setAttribute("aria-busy", "true"); bar.hidden = false; });
   f.addEventListener("htmx:xhr:progress", (e) => {
     if (e.detail.lengthComputable) bar.value = Math.round((e.detail.loaded / e.detail.total) * 100);
   });

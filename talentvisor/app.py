@@ -21,8 +21,8 @@ from fastapi.templating import Jinja2Templates
 from sqlmodel import Session, select
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
-from talentvisor import db, metrics, pipeline, report, stt
-from talentvisor.db import PROCESSING, AuditLog, Candidate, Evaluation, RouterLog, now_utc
+from talentvisor import db, metrics, pipeline, privacy, report, stt
+from talentvisor.db import PROCESSING, AuditLog, Candidate, Evaluation, RouterLog, Transcript, now_utc
 from talentvisor.prompts import QUESTIONS, SKILL_LABELS
 from talentvisor.report import reason_label
 
@@ -245,7 +245,7 @@ def _dtext(decision: dict | None) -> str:
     return f"{DECISION_TEXT[decision['action']]} por recrutador em {_fmt_ts(decision['ts'])}" if decision else ""
 
 
-templates.env.globals.update(STAGES=STAGES, PROCESSING=PROCESSING, SKILL_LABELS=SKILL_LABELS)
+templates.env.globals.update(STAGES=STAGES, PROCESSING=PROCESSING, SKILL_LABELS=SKILL_LABELS, QUESTIONS=QUESTIONS)
 templates.env.filters["mmss"] = lambda t: f"{int(t) // 60:02d}:{int(t) % 60:02d}"
 templates.env.filters["reasons"] = lambda codes: [reason_label(c) for c in codes]
 
@@ -326,9 +326,31 @@ def candidate_page(request: Request, cid: int):
             select(AuditLog).where(AuditLog.candidate_id == cid, AuditLog.action == "contest").order_by(AuditLog.id))]
         text = _dtext(decision)
         name = c.real_name if c.status in ("approved", "rejected") else None  # revealed only after a decision (UI-12)
+        tr = s.exec(select(Transcript).where(Transcript.candidate_id == cid)).first()
         return render(request, "candidate.html", c=c, real_name=name, r=result, decision=decision, decision_text=text,
                       logs=logs, contests=contests, processing=c.status in PROCESSING, error="",
-                      can_decide=c.status in DECIDABLE + FINAL, only_reopen=c.status in FINAL)
+                      can_decide=c.status in DECIDABLE + FINAL, only_reopen=c.status in FINAL,
+                      source=_source(c, tr))
+
+
+def _source(c: Candidate, tr) -> dict:
+    """What the candidate actually said and wrote, for reading next to the AI analysis (UI-17).
+
+    The video itself is gone after STT (REQ-L-01): only the anonymized transcript, its audio
+    quality and the written form remain. The form is anonymized with the known PII on the fly so
+    the review stays blind until the decision (UI-12).
+    """
+    known, form = json.loads(c.pii_json or "{}"), json.loads(c.form_json or "{}")
+    anon = (lambda t: privacy.anonymize(t, known)) if any(form.values()) else (lambda t: t)
+    answers = form.get("answers") or {}
+    written = {k: anon(str(form.get(k) or "")) for k in ("education", "experience", "description")}
+    segs = json.loads(tr.segments_json) if tr else []
+    return {
+        "segments": segs, "quality": json.loads(tr.quality_json) if tr else {},
+        "expires_at": _fmt_ts(tr.expires_at) if tr else None,
+        "duration": segs[-1]["end"] if segs else None,
+        "form": written, "answers": {q: anon(answers.get(q) or "") for q in QUESTIONS},
+    }
 
 
 @app.get("/candidate/{cid}/status")

@@ -393,3 +393,24 @@ def test_decision_requires_choice(client):
     cid = seed()
     r = client.post(f"/candidate/{cid}/decision", data={"comment": "x"})
     assert r.status_code == 422 and "Escolha uma decisão." in r.text
+
+
+def test_detail_shows_source_side_by_side(client):
+    """UI-17: transcript lines with timestamps, anonymized written form, video-deleted note; no real name before decision."""
+    from talentvisor import db
+
+    cid = seed()
+    with Session(db.engine) as s:
+        c = s.get(db.Candidate, cid)
+        c.pii_json = json.dumps({"name": "Maria Silva Souza"})
+        c.form_json = json.dumps({"education": "Direito", "experience": "", "description": "Sou Maria Silva Souza, gosto de mediar.",
+                                  "answers": {"P01": "Explico com exemplos."}})
+        s.add(c)
+        s.add(db.Transcript(candidate_id=cid, text_anon="[NOME] explica",
+                            segments_json=json.dumps([{"start": 12.4, "end": 19.8, "text": "[NOME] explicaria com exemplos"}]),
+                            quality_json=json.dumps({"avg_logprob": -0.3, "no_speech_prob": 0.05, "pct_inaudible": 0.0})))
+        s.commit()
+    html = client.get(f"/candidate/{cid}").text
+    assert 'id="t-12"' in html and "00:12" in html and 'href="#t-12"' in html  # evidence links to the transcript line
+    assert "Vídeo apagado após a transcrição (LGPD)" in html and "<video" not in html
+    assert "Explico com exemplos." in html and "gosto de mediar" in html and "Maria" not in html

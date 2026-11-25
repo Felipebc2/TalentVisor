@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="pt-BR">
+<html lang="pt-BR" data-theme="dark">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -8,27 +8,63 @@
   <link rel="stylesheet" href="/static/style.css">
   <script src="https://unpkg.com/htmx.org@2.0.4"></script>
 </head>
-<body>
-  <header class="container">
-    <nav>
-      <ul><li><strong><a href="/" class="contrast">TalentVisor</a></strong></li></ul>
+{%- set path = request.url.path %}
+{%- set recruiter = path.startswith("/dashboard") or path.startswith("/candidate") %}
+<body class="{{ 'app' if recruiter else 'public' }}">
+<!-- TalentVisor scan console. World: black ground, red only where the scanner looks (live state,
+     review flags, one sweep line). Recruiter: sidebar + one-viewport work area, panels scroll inside.
+     Candidate: calm centered stage, same palette. Evidence first: every score sits next to the quote,
+     the transcript line and the written answer it came from. The video is never shown (deleted, LGPD). -->
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="i-grid" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></symbol>
+  <symbol id="i-scan" viewBox="0 0 24 24"><path d="M4 8V5a1 1 0 0 1 1-1h3M16 4h3a1 1 0 0 1 1 1v3M20 16v3a1 1 0 0 1-1 1h-3M8 20H5a1 1 0 0 1-1-1v-3"/><path d="M4 12h16"/></symbol>
+  <symbol id="i-upload" viewBox="0 0 24 24"><path d="M12 16V4M7 9l5-5 5 5"/><path d="M4 16v3a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-3"/></symbol>
+  <symbol id="i-flag" viewBox="0 0 24 24"><path d="M5 21V4M5 4h11l-2 4 2 4H5"/></symbol>
+  <symbol id="i-user" viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></symbol>
+  <symbol id="i-film" viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M10 9.5v5l4.5-2.5z"/></symbol>
+  <symbol id="i-back" viewBox="0 0 24 24"><path d="M15 18l-6-6 6-6"/></symbol>
+  <symbol id="i-arrow" viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></symbol>
+</svg>
+{% if recruiter %}
+  <aside class="side">
+    <a class="brand" href="/dashboard"><span class="mark" aria-hidden="true"></span>TalentVisor</a>
+    <nav aria-label="Recrutador">
+      <p>Recrutador</p>
       <ul>
-        <li><a href="/upload">Enviar candidatura</a></li>
+        <li><a href="/dashboard"{% if path == "/dashboard" %} aria-current="page"{% endif %}><svg class="ico"><use href="#i-grid"/></svg>Painel</a></li>
+        {% if path.startswith("/candidate") %}<li><a href="{{ path }}" aria-current="page"><svg class="ico"><use href="#i-scan"/></svg>Análise</a></li>{% endif %}
+      </ul>
+    </nav>
+    <nav aria-label="Candidato">
+      <p>Área do candidato</p>
+      <ul>
+        <li><a href="/upload"><svg class="ico"><use href="#i-upload"/></svg>Enviar candidatura</a></li>
+        <li><a href="/contest"><svg class="ico"><use href="#i-flag"/></svg>Contestar</a></li>
+      </ul>
+    </nav>
+    {% from "_macros.html" import ai_notice %}
+    <p class="notice"><strong>Aviso fixo</strong>{{ ai_notice() }}</p>
+  </aside>
+  <main class="work">
+{% else %}
+  <header class="topbar">
+    <a class="brand" href="/"><span class="mark" aria-hidden="true"></span>TalentVisor</a>
+    <nav aria-label="Principal">
+      <ul>
+        <li><a href="/upload"{% if path == "/upload" %} aria-current="page"{% endif %}>Enviar candidatura</a></li>
+        <li><a href="/contest"{% if path == "/contest" %} aria-current="page"{% endif %}>Contestar</a></li>
         <li><a href="/dashboard">Painel do recrutador</a></li>
       </ul>
     </nav>
   </header>
-  <main class="container">
-    {% if flash %}<article role="alert" aria-live="polite">{{ flash }}</article>{% endif %}
+  <main class="stage">
+    {% if flash %}<p class="flash" role="alert" aria-live="polite">{{ flash }}</p>{% endif %}
+{% endif %}
     {% block content %}{% endblock %}
   </main>
-  <footer class="container">
-    {% if request.url.path.startswith("/dashboard") or request.url.path.startswith("/candidate") %}
-      {% from "_macros.html" import ai_notice %}<small>{{ ai_notice() }}</small>
-    {% else %}
-      <small>Vídeo apagado após a transcrição; transcrição mantida por 7 dias. Tratamento conforme a LGPD.</small>
-    {% endif %}
-  </footer>
+{% if not recruiter %}
+  <footer class="fineprint">Vídeo apagado após a transcrição; transcrição mantida por 7 dias. Tratamento conforme a LGPD.</footer>
+{% endif %}
   <script>
     // htmx skips 4xx swaps by default: re-rendered forms/panels with inline errors must show
     document.body.addEventListener("htmx:beforeSwap", (e) => {
