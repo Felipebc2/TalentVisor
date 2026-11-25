@@ -4,23 +4,11 @@ Triagem de candidatos a **Advogado(a) Júnior** por soft skills, a partir das re
 
 MVP acadêmico da disciplina "Agentes Autônomos de IA" (IDP). Tudo roda em Docker, na sua máquina, em `127.0.0.1`.
 
-```mermaid
-flowchart LR
-  subgraph local["Na sua máquina"]
-    direction TB
-    V["Vídeo + formulário"] --> STT["Transcrição<br/>(faster-whisper)"]
-    STT -->|vídeo apagado| A["Anonimização<br/>(regex + spaCy)"]
-  end
-  subgraph cloud["Nuvem (anonimizado)"]
-    direction TB
-    J["Juiz LLM ×3<br/>(Groq / Gemini / Mistral)"] --> AU["Auditor de<br/>outra família"]
-  end
-  subgraph human["Pessoa recrutadora"]
-    direction TB
-    P["Painel com<br/>evidências"] --> D["Decisão humana<br/>+ PDF"]
-  end
-  local --> cloud --> human
-```
+<p align="center">
+  <img src="docs/flowchart/imgs/C4-N1.png" alt="C4 nível 1: candidato e recrutador usam o TalentVisor, que conversa com Groq, Gemini, Mistral, Langflow e o dataset" width="720">
+</p>
+
+Arquitetura completa (C4 níveis 1 a 4 e o diagrama da IA) em [docs/flowchart/flowchart.pdf](docs/flowchart/flowchart.pdf).
 
 ---
 
@@ -112,6 +100,12 @@ make up
 ```
 
 A primeira vez demora alguns minutos: baixa a imagem base, instala as dependências e embute o modelo de transcrição. Depois sobe em segundos.
+
+O que sobe (C4 nível 2): uma aplicação web com o pipeline de IA, o banco SQLite, uma pasta temporária de vídeos e os modelos locais. O importador e os scripts de qualidade usam o mesmo código pela linha de comando.
+
+<p align="center">
+  <img src="docs/flowchart/imgs/C4-N2.png" alt="C4 nível 2: aplicação web, banco SQLite, vídeos temporários, modelos locais, importador e scripts de qualidade" width="640">
+</p>
 
 Confira se está tudo certo:
 
@@ -212,6 +206,12 @@ make up
 - Nenhuma decisão é automática. O nome real só aparece depois que uma pessoa aprova ou reprova.
 - Candidato que não autorizou a análise é recusado sem processar nada.
 
+O caminho de uma candidatura, faixa por faixa: o que roda na sua máquina, o que vai para a nuvem (só texto anonimizado) e onde a pessoa decide.
+
+<p align="center">
+  <img src="docs/flowchart/imgs/AI.png" alt="Como a IA funciona: transcrição e anonimização locais, juiz ×3 e auditor na nuvem, agregação, revisão obrigatória e decisão humana" width="520">
+</p>
+
 Detalhes em [docs/domain/legal.md](docs/domain/legal.md).
 
 ## 10. Onde está cada coisa
@@ -225,4 +225,10 @@ Detalhes em [docs/domain/legal.md](docs/domain/legal.md).
 | Sistema visual | [DESIGN.md](DESIGN.md) |
 | Índice de toda a documentação | [docs/index.md](docs/index.md) |
 
-Código em `talentvisor/` (app FastAPI, pipeline, roteador, privacidade, relatório), scripts em `scripts/`, testes em `tests/`.
+Código em `talentvisor/` (app FastAPI, pipeline, roteador, privacidade, relatório), scripts em `scripts/`, testes em `tests/`. Cada componente abaixo (C4 nível 3) é um módulo Python dessa pasta:
+
+<p align="center">
+  <img src="docs/flowchart/imgs/C4-N3.png" alt="C4 nível 3: rotas, API, orquestrador do pipeline, roteador, cliente LLM, privacidade, transcrição, prompts, relatório, métricas e persistência" width="640">
+</p>
+
+O nível 4 (funções, schemas e tabelas) está em [docs/flowchart/imgs/C4-N4.png](docs/flowchart/imgs/C4-N4.png). As fontes editáveis ficam em [docs/flowchart/](docs/flowchart/) (abra os `.excalidraw` em excalidraw.com).
