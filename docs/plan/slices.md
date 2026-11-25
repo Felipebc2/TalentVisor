@@ -44,8 +44,8 @@ As tasks mantêm o ID `T-NN` (rastreabilidade com a [SPEC §11](../spec/spec.md)
 - [x] **T-19** `[SONNET]` `metrics.py` + bloco de métricas no painel + check de P/R da anonimização (movido da T-08). *P1 · Q-03* · R-S
 
 ## S7: ponta a ponta e auditoria (demo: o fluxo completo com chaves reais)
-- [ ] **T-20** `[HAIKU]` E2E real: C001 e C003 processados, C002 recusado, `eval.py` anexado → `[OPUS]` valida o aceite. *P0*
-- [ ] **T-21** `[OPUS]` `/ponytail-audit` + `graphify update .` + revisão final contra a SPEC. *P1*
+- [x] **T-20** `[HAIKU]` E2E real: C001 e C003 processados, C002 recusado, `eval.py` anexado → `[OPUS]` valida o aceite. *P0*
+- [x] **T-21** `[OPUS]` `/ponytail-audit` + `graphify update .` + revisão final contra a SPEC. *P1*
 
 ```mermaid
 flowchart LR

@@ -20,6 +20,7 @@ _REL = {  # relevance 0-10 per slot (M3/M4/M5/M5F) x stage
     "M3": {"E3": 9, "E4": 6, "E5": 6, "E6": 5},
     "M4": {"E3": 7, "E4": 9, "E5": 8, "E6": 7},
     "M5": {"E3": 7, "E4": 8, "E5": 9, "E6": 9},
+    "M6": {"E3": 6, "E4": 7, "E5": 7, "E6": 8},  # D-055: backup, third family
 }
 
 
@@ -33,11 +34,11 @@ class NoModelAvailable(Exception):
 
 
 def family(model: str) -> str:
-    return "gemini" if model.startswith("gemini") else "gpt-oss"
+    return {"gemini": "gemini", "mistral": "mistral"}.get(llm.provider(model), "gpt-oss")
 
 
 def _window(model: str) -> int:
-    return 1_000_000 if family(model) == "gemini" else 128_000
+    return 1_000_000 if family(model) == "gemini" else 128_000  # gpt-oss and ministral-14b: 128k
 
 
 def _slots() -> list[tuple[str, str, int]]:
@@ -47,6 +48,7 @@ def _slots() -> list[tuple[str, str, int]]:
         ("M4", os.environ.get("M4_MODEL", "openai/gpt-oss-120b"), 0),
         ("M5", os.environ.get("M5_MODEL", "gemini-4-hydrogen"), 0),
         ("M5", M5_FALLBACK, 1),
+        ("M6", os.environ.get("M6_MODEL", "mistral:ministral-14b-2512"), 0),
     ]
 
 
@@ -55,12 +57,12 @@ def route(stage: str, ctx: dict) -> list[Choice]:
     if ctx.get("has_pii"):  # layer 1: every model is cloud, none is eligible
         return []
     tokens, hard = ctx.get("tokens", 0), ctx.get("complex") or ctx.get("low_audio")
-    now = time.monotonic()
+    now, real = time.monotonic(), os.environ.get("LLM_MODE") != "mock"
     scored = []
     for slot, model, pen in _slots():
-        if tokens > _window(model) or _cooldown.get(model, 0) > now:
+        if tokens > _window(model) or _cooldown.get(model, 0) > now or (real and not llm.has_key(model)):
             continue
-        if stage == "E6" and family(model) == ctx.get("judge_family", "gpt-oss"):
+        if stage == "E6" and family(model) in ctx.get("judge_families", {"gpt-oss"}):
             continue
         rel = _REL[slot][stage] - pen
         parts, score = [f"rel {rel}"], rel
@@ -126,4 +128,5 @@ def _retry_after(e: openai.RateLimitError) -> float:
         delay = float(e.response.headers.get("retry-after"))
         return delay if 0 <= delay <= 3600 else 10.0  # nan/negative/absurd → default
     except (TypeError, ValueError):
-        return 10.0
+        # Mistral sends no retry-after but has a per-minute request bucket: 3 x 30 s spans a full window (D-055)
+        return 30.0 if "x-ratelimit-remaining-req-minute" in e.response.headers else 10.0

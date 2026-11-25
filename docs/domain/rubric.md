@@ -30,6 +30,7 @@ Upload → faster-whisper (local) → apaga vídeo → anonimização (local) �
 | Clareza | Resposta objetiva, organizada e no tema | Divaga ou fica fora do tema | Organizada em parte | Direta, em etapas e completa |
 
 Regras do juiz:
+- **Âncoras cumulativas**: 5 só com todos os elementos da âncora 5; faltou um, no máximo 4; só a âncora 3, nota 3; na dúvida, a menor ([D-053](../process/decisions.md)).
 - **Evidência antes da nota**: o trecho literal vem primeiro, depois a justificativa, depois a nota.
 - Sem evidência: nota `null` e confiança baixa. Nunca inventar. O trecho citado precisa existir no texto.
 - Não avaliar conhecimento jurídico técnico.

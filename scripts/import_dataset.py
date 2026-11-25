@@ -77,9 +77,12 @@ def _import_row(src: Source, row: dict, answers: dict, did: str) -> int | None:
     """Create the candidate (and audit); return its id to process, or None when nothing to run."""
     marker = json.dumps({"dataset_id": did})
     with Session(db.engine) as s:
-        done = s.exec(select(db.AuditLog).where(db.AuditLog.action.in_(["imported", "refused"]),
-                                                db.AuditLog.payload_json == marker)).first()
-        if done:
+        prev = s.exec(select(db.AuditLog).where(db.AuditLog.action.in_(["imported", "refused"]),
+                                                db.AuditLog.payload_json == marker)
+                      .order_by(db.AuditLog.id.desc())).first()
+        # a run that ended in `error` (e.g. provider quota) is retried as a new candidate; the old row stays for audit
+        prev_c = prev and s.get(db.Candidate, prev.candidate_id)
+        if prev and (prev.action == "refused" or prev_c is None or prev_c.status != "error"):
             print(f"{did}: skipped: already imported")
             return None
         if (row["liberado_analise"] or "").strip() != "Sim":

@@ -20,8 +20,10 @@ def env(tmp_path, monkeypatch):
     monkeypatch.setattr(db, "engine", create_engine(f"sqlite:///{tmp_path}/t.db"))
     db.init_db()
     router._cooldown.clear()
-    for k in ("M3_MODEL", "M4_MODEL", "M5_MODEL"):
+    for k in ("M3_MODEL", "M4_MODEL", "M5_MODEL", "M6_MODEL"):
         monkeypatch.delenv(k, raising=False)
+    for k in ("GROQ_API_KEY", "GEMINI_API_KEY", "MISTRAL_API_KEY"):
+        monkeypatch.setenv(k, "fake")
     yield
     router._cooldown.clear()
 
@@ -73,8 +75,27 @@ def test_429_falls_back_to_m5(monkeypatch):
 
 
 def test_e6_other_family():
-    assert {router.family(c.model) for c in router.route("E6", {})} == {"gemini"}
-    assert {router.family(c.model) for c in router.route("E6", {"judge_family": "gemini"})} == {"gpt-oss"}
+    assert {router.family(c.model) for c in router.route("E6", {})} == {"gemini", "mistral"}
+    assert {router.family(c.model) for c in router.route("E6", {"judge_families": {"gemini"}})} == {"gpt-oss", "mistral"}
+    # judge fell back across two families: only the third one may audit (D-040, D-055)
+    assert {router.family(c.model) for c in router.route("E6", {"judge_families": {"gpt-oss", "gemini"}})} == {"mistral"}
+    assert router.route("E6", {"judge_families": {"gpt-oss", "gemini", "mistral"}}) == []
+    assert router.route("E6", {})[0].model == "gemini-4-hydrogen"  # Mistral is the backup
+
+
+def test_missing_key_not_eligible(monkeypatch):
+    monkeypatch.delenv("MISTRAL_API_KEY")
+    monkeypatch.setenv("LLM_MODE", "real")
+    assert "mistral" not in {router.family(c.model) for c in router.route("E4", {})}
+    monkeypatch.setenv("LLM_MODE", "mock")  # mock needs no keys
+    assert "mistral" in {router.family(c.model) for c in router.route("E4", {})}
+
+
+def test_groq_and_gemini_down_falls_to_mistral(monkeypatch):
+    down = {m: rate_limit() for m in ("openai/gpt-oss-120b", "gemini-4-hydrogen", "gemini-3.5-flash-lite")}
+    calls = fake(monkeypatch, down)
+    _, meta = router.call("E4", {"tokens": 3000}, [], Out, {})
+    assert calls[-1] == "mistral:ministral-14b-2512" and meta["model"] == calls[-1]
 
 
 def test_invalid_output_escalates(monkeypatch):
@@ -136,3 +157,8 @@ def test_bad_request_no_cooldown(monkeypatch):
     assert calls == ["openai/gpt-oss-120b", "gemini-4-hydrogen"]
     assert router._cooldown == {}
     assert [r.ok for r in logs()] == [False, True]
+
+
+def test_retry_after_missing_uses_minute_bucket():
+    assert router._retry_after(rate_limit(**{"x-ratelimit-remaining-req-minute": "0"})) == 30.0  # Mistral
+    assert router._retry_after(rate_limit(**{"x-other": "1"})) == 10.0  # Gemini: no header at all

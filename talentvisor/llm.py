@@ -1,4 +1,4 @@
-"""OpenAI-compatible client for Groq and Gemini: mock mode, cache, JSON-schema validation, anti-PII assert.
+"""OpenAI-compatible client for Groq, Gemini and Mistral: mock mode, cache, JSON-schema validation, anti-PII assert.
 
 REQ-F-08, REQ-L-04
 """
@@ -19,6 +19,7 @@ from talentvisor.privacy import leaks_known_pii
 _PROVIDERS = {
     "gemini": ("https://generativelanguage.googleapis.com/v1beta/openai/", "GEMINI_API_KEY"),
     "groq": ("https://api.groq.com/openai/v1", "GROQ_API_KEY"),
+    "mistral": ("https://api.mistral.ai/v1", "MISTRAL_API_KEY"),
 }
 
 
@@ -37,8 +38,17 @@ def _client_for(provider: str) -> openai.OpenAI:
     return openai.OpenAI(base_url=url, api_key=os.environ.get(key_env, ""), max_retries=0, timeout=60)
 
 
+def provider(model: str) -> str:
+    """Gemini by name; backups carry a `provider:` prefix (D-055); everything else is Groq."""
+    return "gemini" if model.startswith("gemini") else "mistral" if model.startswith("mistral:") else "groq"
+
+
+def has_key(model: str) -> bool:
+    return bool(os.environ.get(_PROVIDERS[provider(model)][1]))
+
+
 def _client(model: str) -> openai.OpenAI:
-    return _client_for("gemini" if model.startswith("gemini") else "groq")
+    return _client_for(provider(model))
 
 
 def complete(model: str, messages: list[dict], schema: type[BaseModel], known: dict, *,
@@ -60,11 +70,12 @@ def complete(model: str, messages: list[dict], schema: type[BaseModel], known: d
             return schema.model_validate_json(hit.response), {**meta, "cached": True}
 
     msgs, t0 = list(messages), time.monotonic()
-    # Gemini's OpenAI-compat endpoint answers 400 to any `seed` (even null); Groq needs it to vary judge runs.
-    extra = {"seed": seed} if seed is not None and not model.startswith("gemini") else {}
+    # Gemini answers 400 to any `seed` (even null) and Mistral names it differently; Groq needs it to vary judge runs.
+    extra = {"seed": seed} if seed is not None and provider(model) == "groq" else {}
+    api_model = model.split(":", 1)[1] if ":" in model else model  # strip the provider prefix
     for attempt in (1, 2):
         resp = _client(model).chat.completions.create(
-            model=model, messages=msgs, temperature=temperature, **extra,
+            model=api_model, messages=msgs, temperature=temperature, **extra,
             response_format={"type": "json_schema", "json_schema": {"name": schema.__name__, "schema": schema.model_json_schema()}},
         )
         raw = resp.choices[0].message.content or ""

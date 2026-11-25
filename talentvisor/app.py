@@ -9,7 +9,6 @@ import json
 import os
 import secrets
 import shutil
-import sqlite3
 import uuid
 from contextlib import asynccontextmanager
 from pathlib import Path
@@ -22,7 +21,7 @@ from fastapi.templating import Jinja2Templates
 from sqlmodel import Session, select
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
-from talentvisor import db, metrics, pipeline, report
+from talentvisor import db, metrics, pipeline, report, stt
 from talentvisor.db import AuditLog, Candidate, Evaluation, RouterLog, now_utc
 from talentvisor.prompts import QUESTIONS, SKILL_LABELS
 from talentvisor.report import reason_label
@@ -49,8 +48,6 @@ async def lifespan(_: FastAPI):
 app = FastAPI(title="TalentVisor", lifespan=lifespan)
 app.mount("/static", StaticFiles(directory=BASE / "static"), name="static")
 
-DB_PATH = Path("data/talentvisor.db")
-
 
 def render(request: Request, name: str, status: int = 200, **ctx):
     return templates.TemplateResponse(request, name, {"flash": FLASH.get(request.query_params.get("msg")), **ctx}, status_code=status)
@@ -75,9 +72,8 @@ async def server_error(request: Request, exc: Exception):
 
 def _db_ok() -> bool:
     try:
-        DB_PATH.parent.mkdir(exist_ok=True)
-        with sqlite3.connect(DB_PATH) as con:
-            return con.execute("select 1").fetchone() == (1,)
+        with db.engine.connect() as con:  # the configured DB_URL, not a hardcoded path
+            return con.exec_driver_sql("select 1").scalar() == 1
     except Exception:
         return False
 
@@ -86,7 +82,7 @@ def _stt_ok() -> bool:
     try:  # local files only: no load, no download
         from faster_whisper.utils import download_model
 
-        download_model(os.environ.get("STT_MODEL", "large-v3-turbo"), local_files_only=True)
+        download_model(stt.MODEL, local_files_only=True)
         return True
     except Exception:
         return False
@@ -97,7 +93,8 @@ def health():
     body = {
         "db": _db_ok(),
         "stt_model": _stt_ok(),
-        "keys": {"groq": bool(os.environ.get("GROQ_API_KEY")), "gemini": bool(os.environ.get("GEMINI_API_KEY"))},
+        "keys": {"groq": bool(os.environ.get("GROQ_API_KEY")), "gemini": bool(os.environ.get("GEMINI_API_KEY")),
+                 "mistral": bool(os.environ.get("MISTRAL_API_KEY"))},
     }
     # Missing keys don't fail health: mock mode runs without them (D-025).
     return JSONResponse(body, status_code=200 if body["db"] and body["stt_model"] else 503)

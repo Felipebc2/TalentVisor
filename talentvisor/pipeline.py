@@ -143,12 +143,10 @@ def evaluate_text(transcript: str, segments: list[dict], form: dict, known: dict
     # No separate E5 call: the judge already returns profiles and strengths (orchestrator logs the decision).
 
     stage("auditing")
-    # E6 must be a family none of the E4 runs used; both families used (fallback) -> no eligible auditor
+    # E6 must be a family none of the E4 runs used (D-040); the router drops those families, empty list -> human review
     families = {router.family(m) for m in judge_models}
     try:
-        if len(families) > 1:
-            raise router.NoModelAvailable("no auditor family eligible")
-        aud, ameta = router.call("E6", {**ctx, "judge_family": families.pop()}, prompts.auditor_messages(seg),
+        aud, ameta = router.call("E6", {**ctx, "judge_families": families}, prompts.auditor_messages(seg),
                                  prompts.AuditorOutput, known, candidate_id=cid, mock=prompts.MOCK_AUDITOR)
     except router.NoModelAvailable:
         aud, ameta = None, {"model": None}  # not an error: human review (F-12)

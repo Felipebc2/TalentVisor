@@ -131,4 +131,7 @@ def test_seed_not_sent_to_gemini(monkeypatch, tmp_path):
     monkeypatch.setattr(llm, "_client", lambda model: fake)
     llm.complete("gemini-3.5-flash-lite", [{"role": "user", "content": "x"}], Out, {}, seed=1)
     llm.complete("openai/gpt-oss-120b", [{"role": "user", "content": "x"}], Out, {}, seed=1)
+    llm.complete("mistral:ministral-14b-2512", [{"role": "user", "content": "x"}], Out, {}, seed=1)
     assert "seed" not in seen[0] and seen[1]["seed"] == 1
+    assert "seed" not in seen[2] and seen[2]["model"] == "ministral-14b-2512"  # prefix stripped (D-055)
+    assert seen[1]["model"] == "openai/gpt-oss-120b" and llm.provider("mistral:x") == "mistral"

@@ -88,3 +88,17 @@ def test_missing_video_skipped_and_dashboard(env, capsys):
     assert len(calls) == 1
     from talentvisor.app import app
     assert "recusado" in TestClient(app).get("/dashboard").text
+
+
+def test_error_row_is_retried(env):
+    db, mod, calls, z, _ = env
+    mod.main(str(z))
+    with Session(db.engine) as s:
+        c = s.get(db.Candidate, calls[0])
+        c.status = "error"
+        s.add(c)
+        s.commit()
+    mod.main(str(z))
+    assert len(calls) == 3  # only the errored row runs again; refused and evaluated rows are skipped
+    with Session(db.engine) as s:
+        assert len(s.exec(select(db.Candidate)).all()) == 4

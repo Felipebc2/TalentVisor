@@ -81,7 +81,8 @@ Priority: **P0** is MVP, **P1** if time allows, **P2** is extra.
 **REQ-F-03 (P0) Dataset import.**
 - `scripts/import_dataset.py <zip|dir>` reads `candidatos.csv`, `respostas.csv` and `videos.csv` (`utf-8-sig`, `;`).
 - Given `liberado_analise != "Sim"`, then a candidate row is written directly as `status=refused`, `cleared=False`, with **no PII** (`real_name` null, `pii_json {}`, `form_json {}`), no video, never processed; `audit_log(actor=system, action=refused)`; the dashboard shows "✗ recusado". C002 must be refused (D-047).
-- Mapping: `id_pergunta` P01..P05 → answers. Idempotent by `dataset_id`. The pipeline runs synchronously and sequentially; a failing row (e.g. missing video) is reported and skipped, not fatal.
+- Mapping: `id_pergunta` P01..P05 → answers. Idempotent by `dataset_id`; a row whose last import ended in `error` (e.g. provider quota) is imported again as a new candidate, the old row stays for audit (D-056).
+- Given a row whose last import ended in `error`, when the import runs again, then a new candidate is created and processed, and the old `error` row is kept (the dashboard shows both). Given a refused or already evaluated row, or one whose candidate was purged by TTL, then it is skipped. D-056. The pipeline runs synchronously and sequentially; a failing row (e.g. missing video) is reported and skipped, not fatal.
 - The dataset has no institution/city columns, so known PII for imported candidates = `{name}` only; institution/city mentioned in free text rely on regex/NER best-effort (F-06, D-047).
 
 **REQ-F-04 (P0) Local transcription.**
@@ -116,11 +117,11 @@ Priority: **P0** is MVP, **P1** if time allows, **P2** is extra.
 - Given the synthetic injection case, then scores are not raised by it and `human_review=true` with reason `injection_detected`.
 
 **REQ-F-08 (P0) LLM client.**
-- One `openai` client with a per-provider `base_url` (Groq and Gemini OpenAI-compat), using `response_format` json_schema when supported.
+- One `openai` client with a per-provider `base_url` (Groq, Gemini and Mistral, all OpenAI-compat), using `response_format` json_schema when supported. The backup model carries a provider prefix in its ID (`mistral:ministral-14b-2512`); the prefix picks the client and is stripped before the call. D-055.
 - Responses are validated with Pydantic. If invalid, there is 1 retry with the error attached, then the router cascade.
 - `LLM_MODE=mock` returns deterministic fixtures (no network).
 - The cache `llm_cache` uses the key sha256(model, messages, temperature, seed).
-- `seed` is sent only to non-Gemini models: Gemini OpenAI-compat answers 400 to any `seed` (even null); Groq needs it to vary the 3 judge runs. D-043.
+- `seed` is sent only to Groq: Gemini OpenAI-compat answers 400 to any `seed` (even null) and Mistral names it differently; Groq needs it to vary the 3 judge runs. D-043, D-055.
 
 **REQ-F-09 (P0) Soft-skill scoring.**
 - The judge (E4) gets the rubric, the 1/3/5 anchors and the segmented answers. For **each skill** it returns `evidence` (verbatim quote) **first**, then `justification`, then `score` (1–5, or `null` with no evidence).
@@ -143,10 +144,13 @@ Priority: **P0** is MVP, **P1** if time allows, **P2** is extra.
 - `route(stage, ctx) -> list[Choice]` applies layers 1→2→3 from [Modelos e roteador](../architecture/models-router.md) and returns the eligible models in order; `call()` cascades through that list (D-040).
 - Every choice writes `router_log(stage, model, reason, fallback_from, ms, ok, tokens)`.
 - Given text flagged `has_pii=True`, then no cloud model is eligible.
-- Given a 429 on M4, then M5 is used and the log has `fallback_from=M4`.
+- Given a 429 on M4, then M5 is used and the log has `fallback_from=M4`. M6 (Mistral, third family) is the backup after M5/M5F and before M3 in E4. D-055.
+- 429 policy: wait `retry-after` (≤ 65 s) and retry the same model up to 3 times; no `retry-after` → 10 s, or 30 s when the reply has a per-minute request bucket header (Mistral, 2 req/min); then cooldown 60 s and next model. 400 → next model, no cooldown. D-048, D-055.
+- `M6_MODEL` must carry the `mistral:` prefix; the model ID stored in `router_log` and in `models` of the §6 JSON keeps that prefix.
+- Given a provider key that is not set (real mode only), then that provider's models are not eligible (layer 1), so no 401 attempt is logged. D-055.
 
 **REQ-F-12 (P0) Cross-family audit.**
-- E6: M5 (a different model family) re-scores **scores only** with the same rubric.
+- E6: a model of a different family (M5 Gemini, or M6 Mistral as backup; gpt-oss when the judge was Gemini) re-scores **scores only** with the same rubric. D-055.
 - The auditor's family must differ from the family of **every** model used by any E4 run.
 - Given `|judge − auditor| ≥ 2` on any skill, then `human_review=true` with reason `divergence:<skill>`.
 - Given no eligible or working auditor, then `human_review=true` with reason `audit_unavailable` (not an error). D-040.
@@ -285,7 +289,7 @@ Priority: **P0** is MVP, **P1** if time allows, **P2** is extra.
 | GET | `/candidate/{id}/status` | recruiter | HTMX stepper fragment; `HX-Refresh` when done |
 | POST | `/candidate/{id}/decision` | recruiter | success: `HX-Refresh: true`; 4xx swaps the panel: 422 reject without comment, 409 transition forbidden by §8 |
 | GET | `/candidate/{id}/report.pdf` | recruiter | `application/pdf` |
-| GET | `/health` | ops | `{db, stt_model, keys:{groq:bool, gemini:bool}}` · 200 when `db` and `stt_model` are true, else 503 (D-025) |
+| GET | `/health` | ops | `{db, stt_model, keys:{groq:bool, gemini:bool, mistral:bool}}` · 200 when `db` and `stt_model` are true, else 503 (D-025) |
 | GET | `/api/candidates/{id}` | Langflow/external | JSON §6 |
 | POST | `/api/evaluate` | Langflow/external | `{text, form?, known?}` → JSON §6 (no STT) |
 
@@ -330,7 +334,7 @@ stateDiagram-v2
 
 ## 9. Configuration (`.env.example`)
 
-See the file. Keys: `GROQ_API_KEY`, `GEMINI_API_KEY`, `LLM_MODE`, `ALLOW_CLOUD_STT`, `STT_MODEL`, `M3_MODEL`, `M4_MODEL`, `M5_MODEL`, `PROMPT_GUARD_MODEL`, `JUDGE_RUNS`, `TRANSCRIPT_TTL_DAYS`, `DEMO_MODE`.
+See the file. Keys: `GROQ_API_KEY`, `GEMINI_API_KEY`, `MISTRAL_API_KEY`, `LLM_MODE`, `ALLOW_CLOUD_STT`, `STT_MODEL`, `M3_MODEL`, `M4_MODEL`, `M5_MODEL`, `M6_MODEL`, `PROMPT_GUARD_MODEL`, `JUDGE_RUNS`, `TRANSCRIPT_TTL_DAYS`, `DEMO_MODE`.
 
 ## 10. Explicit non-contract decisions
 
@@ -346,15 +350,15 @@ See the file. Keys: `GROQ_API_KEY`, `GEMINI_API_KEY`, `LLM_MODE`, `ALLOW_CLOUD_S
 | NF-03 | T-01 | `test_health.py` (keys are booleans, no value leaks) |
 | L-01, L-05 | T-03 | `test_db.py::test_purge_expired` (+ orphan uploads) |
 | F-01, F-02, NF-04 | T-04 | `test_app.py::test_upload_without_consent_400` (POST → 400), `::test_upload_requires_consent` (GET → 303 to `/`, UI-01), `::test_invalid_extension`, `::test_upload_ok`, `::test_upload_too_big`, `::test_huge_content_length_413`, `::test_dashboard_has_no_names`, `::test_db_failure_deletes_file` |
-| F-03, L-06 | T-05 | `test_import.py::test_c002_refused`, `::test_idempotent` |
+| F-03, L-06 | T-05 | `test_import.py::test_c002_refused`, `::test_idempotent`, `::test_error_row_is_retried` |
 | F-04, L-01 | T-06 | `test_stt.py::test_video_deleted_even_on_error`, `::test_happy_path`, `::test_zero_segments_is_not_perfect_audio` |
 | F-05 | T-07 | `test_stt.py::test_chunks_under_25mb`, `::test_cloud_fallback_offsets_and_prompt`, `::test_no_fallback_when_flag_off` |
 | F-06, L-04 | T-08, T-10 | `test_privacy.py::test_known_pii_removed`, `::test_regex_replaced`, `::test_ner_catches_unknown_person`, `::test_email_with_name_part_is_one_placeholder`, `test_llm.py::test_aborts_on_pii` |
 | F-07 | T-09 | `test_privacy.py::test_injection_detected`, `::test_injection_false_positives`, `test_llm.py::test_guard_mock_returns_none`, `::test_guard_aborts_on_pii`, `::test_guard_max_over_chunks`, `test_prompts.py::test_wrap_candidate_escapes_injected_delimiters` + `eval.py` case 5 |
 | F-08 | T-10 | `test_llm.py::test_mock_and_cache`, `::test_retry_on_invalid_json` |
 | F-09, F-10 | T-11, T-13 | `test_pipeline.py::test_median_confidence` (incl. `[5,4,5]` → 0.76, no review), `::test_missing_evidence` |
-| F-11 | T-12 | `test_router.py` (PII→local, 429→fallback, log written) |
-| F-12, F-13, L-03 | T-13 | `test_pipeline.py::test_review_triggers` |
+| F-11 | T-12 | `test_router.py` (PII→no eligible model, 429→fallback, log written), `::test_missing_key_not_eligible`, `::test_groq_and_gemini_down_falls_to_mistral`, `::test_retry_after_missing_uses_minute_bucket` |
+| F-12, F-13, L-03 | T-13 | `test_pipeline.py::test_review_triggers`, `::test_audit_unavailable`, `test_router.py::test_e6_other_family` (E6 excludes every E4 family) |
 | F-10, L-03 | T-13 | `test_pipeline.py::test_full_mock_run` |
 | §7 `/api/evaluate` | T-13, T-17 | `test_app.py::test_api_evaluate*` |
 | F-14, F-15 | T-14 | `test_app.py::test_decision_writes_audit` + manual check |

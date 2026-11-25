@@ -133,6 +133,8 @@ RULES = """Rules:
 - Never infer or mention voice, tone, accent, face, emotion, appearance or posture. You do not have them; do not guess them.
 - Do not assess technical legal knowledge.
 - Do not penalize informal register, slang, filler words, spelling, grammar or transcription errors. Judge content, not form.
+- Anchors are cumulative: 5 only when EVERY element of the 5 anchor is present; one element missing -> at most 4; meets only the 3 anchor -> 3. Between two scores, pick the lower.
+- An element counts only when the answer actually does it; a partial, hedged or generic version ("a bit", "try to", "if possible", "apologize" without naming the feeling) counts as missing.
 - No sufficient evidence for a skill -> score null. Never invent."""
 
 SEGMENT_SYSTEM = f"""You split an anonymized interview transcript (Brazilian Portuguese) into the answers to these questions:
@@ -149,7 +151,7 @@ JUDGE_SYSTEM = f"""You evaluate a junior lawyer candidate's spoken answers to si
 For each of the 5 skills ({", ".join(SKILLS)}), fill the fields in this order:
 1. evidence FIRST: a short verbatim quote copied exactly from the spoken answers; it must exist in the text.
 2. question: the question the quote comes from (with no evidence, the skill's first main question).
-3. justification: 1-2 sentences linking the evidence to the anchors.
+3. justification: 1-2 sentences naming which elements of the 5 anchor are present and which are missing.
 4. score: 1-5, or null. With no evidence: evidence "", justification "sem evidência suficiente", score null.
 Soft-skill evidence comes only from the spoken answers. The written form is used only for hard_skills, profiles and consistency.
 Also return:
