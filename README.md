@@ -6,12 +6,21 @@ MVP acadêmico da disciplina "Agentes Autônomos de IA" (IDP). Tudo roda em Dock
 
 ```mermaid
 flowchart TD
-  V["Vídeo + formulário do candidato"] --> STT["Transcrição local (faster-whisper)"]
-  STT -->|vídeo apagado| A["Anonimização local (regex + spaCy)"]
-  A -->|só texto anonimizado| J["Juiz LLM ×3 (Groq / Gemini / Mistral)"]
-  J --> AU["Auditor de outra família de modelo"]
-  AU --> P["Painel do recrutador"]
-  P --> D["Decisão humana + PDF"]
+  subgraph local["Na sua máquina"]
+    direction LR
+    V["Vídeo + formulário"] --> STT["Transcrição<br/>(faster-whisper)"]
+    STT -->|vídeo apagado| A["Anonimização<br/>(regex + spaCy)"]
+  end
+  subgraph cloud["Nuvem: só texto anonimizado"]
+    direction LR
+    J["Juiz LLM ×3<br/>(Groq / Gemini / Mistral)"] --> AU["Auditor de<br/>outra família"]
+  end
+  subgraph human["Pessoa recrutadora"]
+    direction LR
+    P["Painel com evidências"] --> D["Decisão humana + PDF"]
+  end
+  A --> J
+  AU --> P
 ```
 
 ---
